@@ -146,7 +146,7 @@ function errorResponse(message, status = 400, origin, extraHeaders = {}) {
 
 // ── Gemini API Call ──
 async function callGemini(env, promptOrContents, systemInstruction = '') {
-  const model = 'gemini-1.5-flash-latest';
+  const model = 'gemini-1.5-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`;
 
   let contents;
