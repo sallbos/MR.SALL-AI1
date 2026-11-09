@@ -395,12 +395,57 @@ async function runWorkerSimulation() {
     const chatArJson = await chatArRes.json();
     assert(chatArJson.content.includes('صالح') && chatArJson.content.includes('gemini-3.8-flash'), 'Arabic response confirmed with proper formatting');
 
-    // Test 9: Health Check returns gemini-3.8-flash as the active model
+    // Test 9: Health Check & Live Diagnostic Test
     const healthRes2 = await worker.fetch(new Request('https://mr-sall-ai1.workers.dev/api/health'), mockEnv);
     const healthJson2 = await healthRes2.json();
     assert(healthJson2.gemini_model === 'gemini-3.8-flash', 'GET /api/health accurately reports active model as "gemini-3.8-flash"');
 
-    // Test 10: Clear HTTP Error Handling (401 Unauthorized simulation)
+    // Test 9b: Direct Health Diagnostic Test (GET /api/health?test=true)
+    const healthDiagRes = await worker.fetch(new Request('https://mr-sall-ai1.workers.dev/api/health?test=true'), mockEnv);
+    assert(healthDiagRes.status === 200, 'GET /api/health?test=true returns 200 OK for live diagnostic');
+    const healthDiagJson = await healthDiagRes.json();
+    assert(healthDiagJson.status === 'ok' && healthDiagJson.test.api_key_configured === true, 'Diagnostic test successfully validates GEMINI_API_KEY from Cloudflare Worker');
+
+    // Test 10: Missing Secret Verification (Returns 503 with MISSING_GEMINI_API_KEY)
+    const mockEnvNoKey = { ...mockEnv, GEMINI_API_KEY: '' };
+    const noKeyRes = await worker.fetch(new Request('https://mr-sall-ai1.workers.dev/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'test' }] })
+    }), mockEnvNoKey);
+    assert(noKeyRes.status === 503, 'Missing GEMINI_API_KEY returns HTTP 503 Service Unavailable');
+    const noKeyJson = await noKeyRes.json();
+    assert(noKeyJson.code === 'MISSING_GEMINI_API_KEY', 'Error payload explicitly indicates MISSING_GEMINI_API_KEY');
+
+    // Test 11: Retry with Exponential Backoff on Transient 503 Error (2 fails, 3rd succeeds)
+    let callAttempts = 0;
+    globalThis.fetch = async (url, options = {}) => {
+      const urlStr = String(url);
+      if (urlStr.includes(':generateContent')) {
+        callAttempts++;
+        if (callAttempts < 3) {
+          // Simulate temporary Google 503 Service Unavailable
+          return new Response('The model is overloaded.', { status: 503 });
+        }
+        // 3rd attempt succeeds
+        return new Response(JSON.stringify({
+          candidates: [{ content: { parts: [{ text: 'Recovered after backoff retries!' }] } }]
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return originalFetch(url, options);
+    };
+
+    const retryChatRes = await worker.fetch(new Request('https://mr-sall-ai1.workers.dev/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'retry test' }] })
+    }), mockEnv);
+    assert(retryChatRes.status === 200, 'Chat recovers successfully after transient 503 failures via exponential backoff');
+    const retryChatJson = await retryChatRes.json();
+    assert(retryChatJson.content === 'Recovered after backoff retries!', 'Response text verified after backoff recovery');
+    assert(callAttempts === 3, 'Exactly 3 attempts executed before recovery');
+
+    // Test 12: Clear HTTP Error Handling (401 Unauthorized simulation)
     globalThis.fetch = async (url) => {
       return new Response('API key not valid', { status: 401 });
     };
@@ -409,7 +454,7 @@ async function runWorkerSimulation() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: [{ role: 'user', content: 'test' }] })
     }), mockEnv);
-    assert(chat401Res.status === 500, 'Handled 401 returns controlled error response');
+    assert(chat401Res.status === 401, 'Handled 401 returns controlled HTTP 401 status code');
     const chat401Json = await chat401Res.json();
     assert(chat401Json.message.includes('401') && !chat401Json.message.includes('test_mock_key'), '401 error message is descriptive and does not expose secrets');
 
