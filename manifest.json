@@ -1,0 +1,176 @@
+{
+  "name": "MR.SALL AI",
+  "short_name": "MR.SALL",
+  "description": "Your Intelligence. Your Tools. Your Future. Premium Multilingual AI Platform.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#080B18",
+  "theme_color": "#080B18",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": [
+    "productivity",
+    "utilities",
+    "business"
+  ],
+  "icons": [
+    {
+      "src": "assets/icons/pwa/icon-72x72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/pwa/icon-96x96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/pwa/icon-128x128.png",
+      "sizes": "128x128",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/pwa/icon-144x144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/pwa/icon-152x152.png",
+      "sizes": "152x152",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/pwa/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/pwa/icon-384x384.png",
+      "sizes": "384x384",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/pwa/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/pwa/icon-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "assets/icons/pwa/screenshot-desktop.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "MR.SALL AI Dashboard Desktop View"
+    },
+    {
+      "src": "assets/icons/pwa/screenshot-mobile.png",
+      "sizes": "720x1280",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "MR.SALL AI Mobile Experience"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "AI Chat",
+      "short_name": "Chat",
+      "description": "Start an intelligent conversation with MR.SALL AI",
+      "url": "./tools/chat.html",
+      "icons": [
+        {
+          "src": "assets/icons/pwa/icon-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "AI Writer",
+      "short_name": "Writer",
+      "description": "Generate articles, essays, and copy with AI Writer",
+      "url": "./tools/writer.html",
+      "icons": [
+        {
+          "src": "assets/icons/pwa/icon-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "AI Translator",
+      "short_name": "Translator",
+      "description": "Instant Arabic, English, and French translation",
+      "url": "./tools/translator.html",
+      "icons": [
+        {
+          "src": "assets/icons/pwa/icon-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "AI Code",
+      "short_name": "Code",
+      "description": "Generate, explain, and debug code",
+      "url": "./tools/code.html",
+      "icons": [
+        {
+          "src": "assets/icons/pwa/icon-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "AI Study",
+      "short_name": "Study",
+      "description": "Explanations, summaries, and study assistance",
+      "url": "./tools/study.html",
+      "icons": [
+        {
+          "src": "assets/icons/pwa/icon-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "AI Image",
+      "short_name": "Image",
+      "description": "Generate creative visuals with AI",
+      "url": "./tools/image.html",
+      "icons": [
+        {
+          "src": "assets/icons/pwa/icon-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "PDF Assistant",
+      "short_name": "PDF",
+      "description": "Upload and chat with PDF documents",
+      "url": "./tools/pdf.html",
+      "icons": [
+        {
+          "src": "assets/icons/pwa/icon-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

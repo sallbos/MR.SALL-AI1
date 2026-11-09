@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="Sign in to MR.SALL AI — Your intelligent AI platform. Create, learn, translate, code, and work smarter.">
+  <meta name="theme-color" content="#080B18">
+  <title>Sign In — MR.SALL AI</title>
+
+  <!-- Favicon & PWA Icons -->
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="assets/icons/pwa/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MR.SALL AI">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="application-name" content="MR.SALL AI">
+  <meta name="msapplication-TileColor" content="#080B18">
+  <meta name="msapplication-TileImage" content="assets/icons/pwa/icon-144x144.png">
+  <link rel="stylesheet" href="css/style.css">
+
+  <!-- Google Identity Services -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body class="login-body">
+
+  <!-- Background Ambience -->
+  <div class="hero-bg"></div>
+  <div class="hero-grid"></div>
+
+  <!-- Topbar -->
+  <header class="login-topbar">
+    <a href="login.html" class="nav-logo">
+      <img src="assets/logo.png" alt="MR.SALL AI Logo" class="nav-logo-img">
+      <div class="nav-logo-text">
+        <span>MR.SALL </span><span class="ai-badge">AI</span>
+      </div>
+    </a>
+    <div style="display:flex;align-items:center;gap:14px;">
+      <button type="button" class="btn-pwa-install" aria-label="Install App">
+        <span>⚡</span> <span data-i18n="install_btn">Install App</span>
+      </button>
+      <a href="founder.html" style="font-size:13px;font-weight:600;color:var(--text-secondary);text-decoration:none;transition:color var(--transition-fast);" onmouseover="this.style.color='var(--brand-blue)'" onmouseout="this.style.color='var(--text-secondary)'" data-i18n="nav_founder">About Founder</a>
+      <select class="lang-select" aria-label="Language">
+        <option value="en">🌐 EN</option>
+        <option value="ar">🌐 AR</option>
+        <option value="fr">🌐 FR</option>
+      </select>
+      <button class="theme-toggle" aria-label="Toggle theme">☀️</button>
+    </div>
+  </header>
+
+  <!-- Login Card Wrapper -->
+  <main class="login-page-wrapper">
+    <div class="login-card">
+      <!-- Mascot Avatar Frame -->
+      <div class="login-mascot-frame">
+        <img src="assets/mascot.jpg" alt="MR.SALL AI Hooded Character" class="login-mascot-img">
+      </div>
+
+      <!-- Brand Tag -->
+      <div class="login-brand-tag">
+        <span>⚡</span>
+        <span data-i18n="hero_badge">Free · Powerful · Multilingual</span>
+      </div>
+
+      <!-- Headings -->
+      <h1 class="login-title" data-i18n="login_heading">Welcome to MR.SALL AI</h1>
+      <p class="login-subtitle" data-i18n="login_subheading">Your Intelligence. Your Tools. Your Future.</p>
+
+      <!-- Action Buttons -->
+      <div class="login-actions">
+        <!-- Native GIS button container (when client_id configured) -->
+        <div id="g-signin-btn-box" style="display:flex;justify-content:center;"></div>
+
+        <!-- Prominent Google Sign-In Button -->
+        <button type="button" class="btn-google" id="google-login-btn">
+          <!-- Official Google "G" Logo -->
+          <svg viewBox="0 0 24 24" width="20" height="20">
+            <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
+            <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
+            <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.18 0 9.98 0 12s.45 3.82 1.25 5.42l4.03-3.15z"/>
+            <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+          </svg>
+          <span data-i18n="login_google_btn">Continue with Google</span>
+        </button>
+
+        <div class="login-divider">
+          <span data-i18n="login_divider">or</span>
+        </div>
+
+        <!-- Continue as Guest Button -->
+        <button type="button" class="btn-guest" id="guest-login-btn">
+          <span>👤</span>
+          <span data-i18n="login_guest_btn">Continue as Guest</span>
+        </button>
+        <span style="font-size:11px;color:var(--text-muted);display:block;margin-top:-4px;" data-i18n="login_guest_desc">
+          Instant access with free daily quota · No sign up needed
+        </span>
+      </div>
+
+      <!-- Included Features List -->
+      <div class="login-features-box">
+        <div class="login-features-title" data-i18n="login_features_title">Included in your free access:</div>
+        <div class="login-features-list">
+          <div class="login-feature-item">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            <span data-i18n="login_feat_1">All 7 AI tools (Chat, Code, Writer, Translator, Study, Image, PDF)</span>
+          </div>
+          <div class="login-feature-item">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            <span data-i18n="login_feat_2">Multi-turn conversation history across devices</span>
+          </div>
+          <div class="login-feature-item">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            <span data-i18n="login_feat_3">Lightning-fast responses in Arabic, English, and French</span>
+          </div>
+          <div class="login-feature-item">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            <span data-i18n="login_feat_4">Zero subscription · 100% Free tier access</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Legal Links -->
+      <p class="login-terms">
+        <span data-i18n="login_terms_prefix">By continuing, you agree to our</span>
+        <a href="terms.html" data-i18n="login_terms_link">Terms of Service</a>
+        <span data-i18n="login_and">and</span>
+        <a href="privacy.html" data-i18n="login_privacy_link">Privacy Policy</a>.
+      </p>
+    </div>
+  </main>
+
+  <!-- Scripts -->
+  <script src="js/theme.js"></script>
+  <script src="js/language.js"></script>
+  <script src="js/tools.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/pwa.js"></script>
+  <script src="js/app.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // If user is already authenticated, redirect to dashboard or requested page
+      if (AuthManager.isAuthenticated()) {
+        const params = new URLSearchParams(window.location.search);
+        const redirectUrl = params.get('redirect') || 'index.html';
+        window.location.href = redirectUrl;
+        return;
+      }
+
+      // Initialize GIS if Client ID is configured
+      window.addEventListener('load', () => {
+        AuthManager.initGoogleIdentity('g-signin-btn-box');
+      });
+
+      // Google Sign-In button click
+      document.getElementById('google-login-btn')?.addEventListener('click', () => {
+        AuthManager.triggerGoogleSignIn();
+      });
+
+      // Continue as Guest button click
+      document.getElementById('guest-login-btn')?.addEventListener('click', () => {
+        AuthManager.loginAsGuest();
+      });
+    });
+  </script>
+</body>
+</html>

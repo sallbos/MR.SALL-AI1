@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#080B18">
+  <title>Privacy Policy — MR.SALL AI</title>
+  <!-- Favicon & PWA Icons -->
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="assets/icons/pwa/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MR.SALL AI">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="application-name" content="MR.SALL AI">
+  <meta name="msapplication-TileColor" content="#080B18">
+  <meta name="msapplication-TileImage" content="assets/icons/pwa/icon-144x144.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="navbar" id="navbar">
+  <div class="container">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo">
+        <img src="assets/logo.png" alt="MR.SALL AI Logo" class="nav-logo-img">
+        <div class="nav-logo-text"><span>MR.SALL </span><span class="ai-badge">AI</span></div>
+      </a>
+      <div class="nav-actions">
+        <button type="button" class="btn-pwa-install" aria-label="Install App">
+          <span>⚡</span> <span data-i18n="install_btn">Install App</span>
+        </button>
+        <select class="lang-select">
+          <option value="en">🌐 EN</option>
+          <option value="ar">🌐 AR</option>
+          <option value="fr">🌐 FR</option>
+        </select>
+        <button class="theme-toggle" aria-label="Toggle theme">☀️</button>
+        <a href="founder.html" class="btn btn-ghost btn-sm" data-i18n="nav_founder">About Founder</a>
+        <button class="btn btn-ghost btn-sm" data-action="settings" data-i18n="nav_settings">Settings</button>
+        <a href="index.html" class="btn btn-secondary btn-sm" data-i18n="back_home">← Home</a>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<main style="padding-top:var(--nav-height);">
+  <div class="page-content">
+    <h1>🔒 <span class="gradient-text">Privacy Policy</span></h1>
+    <p><em>Last updated: November 2024</em></p>
+
+    <h2>1. Introduction</h2>
+    <p>MR.SALL AI ("we", "our", or "us") is committed to protecting your privacy. This Privacy Policy explains how we handle information when you use our AI platform.</p>
+
+    <h2>2. Information We Process</h2>
+    <p>When you use our AI tools, the text you submit (prompts, documents, questions) is sent to our secure backend for processing. We do not permanently store this content after generating a response.</p>
+    <ul>
+      <li>Chat messages are stored locally in your browser's localStorage only.</li>
+      <li>Uploaded PDF files are processed in memory and are not permanently stored on our servers.</li>
+      <li>We do not collect personal information such as your name, email, or account data.</li>
+    </ul>
+
+    <h2>3. API Keys and Security</h2>
+    <p>AI API keys are stored securely as Cloudflare Worker environment secrets and are never exposed to the browser or frontend code. All API calls are made server-side through our secure Worker backend.</p>
+
+    <h2>4. Local Storage</h2>
+    <p>We use your browser's localStorage to save:</p>
+    <ul>
+      <li>Your theme preference (dark/light).</li>
+      <li>Your language preference (English/Arabic/French).</li>
+      <li>Chat conversation history (stored only on your device).</li>
+    </ul>
+    <p>You can clear this data at any time by clearing your browser's local storage.</p>
+
+    <h2>5. Third-Party AI Services</h2>
+    <p>Our platform uses third-party AI APIs (such as Google Gemini) to generate responses. Your inputs are transmitted to these services for processing. Please review their respective privacy policies.</p>
+
+    <h2>6. No User Accounts</h2>
+    <p>MR.SALL AI does not require registration or account creation. We do not collect or store personal identifiers.</p>
+
+    <h2>7. Rate Limiting</h2>
+    <p>To prevent abuse, we apply rate limiting based on IP addresses at the server level. IP addresses are not stored permanently.</p>
+
+    <h2>8. Cookies</h2>
+    <p>We do not use tracking cookies. We only use localStorage for preferences as described above.</p>
+
+    <h2>9. Children's Privacy</h2>
+    <p>MR.SALL AI is not directed at children under 13. We do not knowingly collect information from children.</p>
+
+    <h2>10. Changes</h2>
+    <p>We may update this Privacy Policy periodically. Continued use of the platform after changes constitutes acceptance of the new policy.</p>
+
+    <h2>11. Contact</h2>
+    <p>For privacy-related inquiries, contact us at: <a href="mailto:privacy@mrsall.ai" style="color:var(--brand-blue);">privacy@mrsall.ai</a></p>
+  </div>
+</main>
+
+<script src="js/theme.js"></script>
+<script src="js/language.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/pwa.js"></script>
+<script src="js/tools.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

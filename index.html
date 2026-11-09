@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="MR.SALL AI — Your intelligent AI platform. Create, learn, translate, code, and work smarter.">
+  <meta name="theme-color" content="#080B18">
+  <title>MR.SALL AI — Your Intelligence. Your Tools. Your Future.</title>
+  <!-- Favicon & PWA Icons -->
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="assets/icons/pwa/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MR.SALL AI">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="application-name" content="MR.SALL AI">
+  <meta name="msapplication-TileColor" content="#080B18">
+  <meta name="msapplication-TileImage" content="assets/icons/pwa/icon-144x144.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ══════════════════════════════════
+     NAVBAR
+══════════════════════════════════ -->
+<nav class="navbar" id="navbar">
+  <div class="container">
+    <div class="nav-inner">
+      <!-- Logo -->
+      <a href="index.html" class="nav-logo">
+        <img src="assets/logo.png" alt="MR.SALL AI Logo" class="nav-logo-img">
+        <div class="nav-logo-text">
+          <span>MR.SALL </span><span class="ai-badge">AI</span>
+        </div>
+      </a>
+
+      <!-- Desktop Links -->
+      <ul class="nav-links">
+        <li><a href="#home" data-i18n="nav_home">Home</a></li>
+        <li><a href="#tools" data-i18n="nav_tools">AI Tools</a></li>
+        <li><a href="founder.html" data-i18n="nav_founder">About Founder</a></li>
+        <li><a href="#why" data-i18n="nav_about">About</a></li>
+        <li><a href="#settings" data-action="settings" data-i18n="nav_settings">Settings</a></li>
+      </ul>
+
+      <!-- Actions -->
+      <div class="nav-actions">
+        <div class="nav-usage-badge" id="nav-usage-badge" title="Daily message quota" data-action="settings">
+          ⚡ <span class="usage-remaining">50</span> left
+        </div>
+        <button type="button" class="btn-pwa-install" aria-label="Install App">
+          <span>⚡</span> <span data-i18n="install_btn">Install App</span>
+        </button>
+        <select class="lang-select" aria-label="Language">
+          <option value="en">🌐 EN</option>
+          <option value="ar">🌐 AR</option>
+          <option value="fr">🌐 FR</option>
+        </select>
+        <button class="theme-toggle" aria-label="Toggle theme">☀️</button>
+        <button class="menu-toggle" aria-label="Menu">☰</button>
+        <a href="#tools" class="btn btn-primary btn-sm" data-i18n="nav_start">Get Started</a>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- Mobile Nav -->
+<div class="mobile-nav">
+  <button type="button" class="btn btn-primary btn-pwa-install" style="width:100%;justify-content:center;margin-bottom:6px;" aria-label="Install App">
+    <span>⚡</span> <span data-i18n="install_btn">Install App</span>
+  </button>
+  <a href="#home" data-i18n="nav_home">Home</a>
+  <a href="#tools" data-i18n="nav_tools">AI Tools</a>
+  <a href="founder.html" data-i18n="nav_founder">About Founder</a>
+  <a href="#why" data-i18n="nav_about">About</a>
+  <a href="#settings" data-action="settings" data-i18n="nav_settings">Settings</a>
+  <select class="lang-select" style="margin-top:8px;">
+    <option value="en">🌐 English</option>
+    <option value="ar">🌐 العربية</option>
+    <option value="fr">🌐 Français</option>
+  </select>
+</div>
+
+<!-- ══════════════════════════════════
+     HERO SECTION
+══════════════════════════════════ -->
+<section class="hero" id="home">
+  <div class="hero-bg"></div>
+  <div class="hero-grid"></div>
+  <div class="container">
+    <div class="hero-inner">
+      <!-- Content -->
+      <div class="hero-content">
+        <div class="hero-badge">
+          <span class="dot"></span>
+          <span data-i18n="hero_badge">Free · Powerful · Multilingual</span>
+        </div>
+        <h1 class="hero-title">
+          <span class="gradient-text" data-i18n="hero_title_1">MR.SALL</span><br>
+          <span data-i18n="hero_title_2">AI</span>
+        </h1>
+        <p class="hero-tagline" data-i18n="hero_tagline">Your Intelligence. Your Tools. Your Future.</p>
+        <p class="hero-description" data-i18n="hero_desc">One intelligent platform to help you create, learn, translate, code, and work smarter.</p>
+        <div class="hero-buttons">
+          <a href="#tools" class="btn btn-primary" data-i18n="hero_cta1">Get Started</a>
+          <a href="#tools" class="btn btn-secondary" data-i18n="hero_cta2">Explore Tools</a>
+          <button type="button" class="btn btn-outline btn-pwa-install" aria-label="Install MR.SALL AI">
+            <span>⚡</span> <span data-i18n="install_btn">Install App</span>
+          </button>
+        </div>
+        <div class="hero-stats">
+          <div class="hero-stat">
+            <span class="hero-stat-value" data-i18n="hero_stat1_val">7+</span>
+            <span class="hero-stat-label" data-i18n="hero_stat1_lbl">AI Tools</span>
+          </div>
+          <div class="hero-stat">
+            <span class="hero-stat-value" data-i18n="hero_stat2_val">3</span>
+            <span class="hero-stat-label" data-i18n="hero_stat2_lbl">Languages</span>
+          </div>
+          <div class="hero-stat">
+            <span class="hero-stat-value" data-i18n="hero_stat3_val">Free</span>
+            <span class="hero-stat-label" data-i18n="hero_stat3_lbl">Access</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mascot Visual -->
+      <div class="hero-visual">
+        <div class="hero-mascot-wrapper">
+          <div class="hero-mascot-glow"></div>
+          <div class="hero-orbit"></div>
+          <div class="hero-orbit hero-orbit-2"></div>
+          <img src="assets/mascot.jpg" alt="MR.SALL AI Character" class="hero-mascot-img" loading="eager">
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════
+     USER DASHBOARD & USAGE OVERVIEW
+══════════════════════════════════ -->
+<section class="dashboard-section" id="dashboard-overview" style="display:none;">
+  <div class="container">
+    <div class="dashboard-card">
+      <div class="dashboard-header-flex">
+        <div class="dashboard-user-profile">
+          <div class="dashboard-avatar" id="dashboard-user-avatar"></div>
+          <div>
+            <div class="dashboard-welcome-text">
+              <span data-i18n="dashboard_welcome">Welcome back</span>,
+            </div>
+            <div class="dashboard-user-name" id="dashboard-user-name">User</div>
+            <div style="font-size:12px;color:var(--text-muted);" id="dashboard-user-email"></div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div id="dashboard-plan-badge" class="dashboard-badge badge-free">Free (50/day)</div>
+          <button type="button" class="btn btn-secondary btn-sm" id="dashboard-upgrade-btn">
+            ⭐ <span data-i18n="dashboard_upgrade">Upgrade Plan</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="dashboard-stats-grid">
+        <div class="dashboard-stat-box">
+          <div class="dashboard-stat-label" data-i18n="dashboard_remaining">Remaining Today</div>
+          <div class="dashboard-stat-val gradient-text" id="dashboard-usage-remaining">50</div>
+        </div>
+        <div class="dashboard-stat-box">
+          <div class="dashboard-stat-label" data-i18n="dashboard_used">Used Today</div>
+          <div class="dashboard-stat-val" id="dashboard-usage-used">0</div>
+        </div>
+        <div class="dashboard-stat-box">
+          <div class="dashboard-stat-label" data-i18n="dashboard_limit">Daily Limit</div>
+          <div class="dashboard-stat-val" id="dashboard-usage-limit">50</div>
+        </div>
+      </div>
+
+      <div class="dashboard-progress-wrap">
+        <div class="dashboard-progress-header">
+          <span style="font-weight:700;color:var(--text-secondary);" data-i18n="dashboard_daily_usage">Daily Usage Progress</span>
+          <span style="font-weight:700;color:var(--brand-blue);" id="dashboard-usage-percent">0%</span>
+        </div>
+        <div class="dashboard-progress-track">
+          <div class="dashboard-progress-fill" id="dashboard-usage-bar" style="width:0%;"></div>
+        </div>
+        <div style="margin-top:8px;font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between;">
+          <span data-i18n="dashboard_resets_at">Resets daily at 00:00 UTC</span>
+          <span>MR.SALL AI Engine</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════
+     AI TOOLS SECTION
+══════════════════════════════════ -->
+<section class="section-padding" id="tools" style="background:var(--bg-secondary);">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-label" data-i18n="tools_label">Platform</span>
+      <h2 class="section-title" data-i18n="tools_title">All AI Tools</h2>
+      <p class="section-subtitle" data-i18n="tools_subtitle">Everything you need in one place — chat, write, translate, study, generate images, code, and work with PDFs.</p>
+    </div>
+
+    <div class="tools-grid">
+      <!-- AI Chat -->
+      <a href="tools/chat.html" class="tool-card">
+        <div class="tool-icon">💬</div>
+        <div class="tool-name" data-i18n="tool_chat_name">AI Chat</div>
+        <p class="tool-description" data-i18n="tool_chat_desc">Have intelligent conversations with an AI assistant. Ask questions, get explanations, brainstorm ideas.</p>
+        <div class="tool-link">
+          <span data-i18n="tool_open">Open Tool</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </div>
+      </a>
+
+      <!-- AI Writer -->
+      <a href="tools/writer.html" class="tool-card">
+        <div class="tool-icon">✍️</div>
+        <div class="tool-name" data-i18n="tool_writer_name">AI Writer</div>
+        <p class="tool-description" data-i18n="tool_writer_desc">Generate articles, emails, summaries, and creative content in seconds.</p>
+        <div class="tool-link">
+          <span data-i18n="tool_open">Open Tool</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </div>
+      </a>
+
+      <!-- AI Translator -->
+      <a href="tools/translator.html" class="tool-card">
+        <div class="tool-icon">🌐</div>
+        <div class="tool-name" data-i18n="tool_translator_name">AI Translator</div>
+        <p class="tool-description" data-i18n="tool_translator_desc">Translate between Arabic, English, and French with high accuracy.</p>
+        <div class="tool-link">
+          <span data-i18n="tool_open">Open Tool</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </div>
+      </a>
+
+      <!-- AI Study -->
+      <a href="tools/study.html" class="tool-card">
+        <div class="tool-icon">🎓</div>
+        <div class="tool-name" data-i18n="tool_study_name">AI Study</div>
+        <p class="tool-description" data-i18n="tool_study_desc">Understand difficult concepts, summarize materials, generate practice questions.</p>
+        <div class="tool-link">
+          <span data-i18n="tool_open">Open Tool</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </div>
+      </a>
+
+      <!-- AI Image -->
+      <a href="tools/image.html" class="tool-card">
+        <div class="tool-icon">🎨</div>
+        <div class="tool-name" data-i18n="tool_image_name">AI Image</div>
+        <p class="tool-description" data-i18n="tool_image_desc">Describe an image in words and generate stunning visuals powered by AI.</p>
+        <div class="tool-link">
+          <span data-i18n="tool_open">Open Tool</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </div>
+      </a>
+
+      <!-- AI Code -->
+      <a href="tools/code.html" class="tool-card">
+        <div class="tool-icon">💻</div>
+        <div class="tool-name" data-i18n="tool_code_name">AI Code</div>
+        <p class="tool-description" data-i18n="tool_code_desc">Generate, explain, and debug code across multiple programming languages.</p>
+        <div class="tool-link">
+          <span data-i18n="tool_open">Open Tool</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </div>
+      </a>
+
+      <!-- PDF Assistant -->
+      <a href="tools/pdf.html" class="tool-card">
+        <div class="tool-icon">📄</div>
+        <div class="tool-name" data-i18n="tool_pdf_name">PDF Assistant</div>
+        <p class="tool-description" data-i18n="tool_pdf_desc">Upload a PDF, ask questions about it, and get instant AI-powered answers.</p>
+        <div class="tool-link">
+          <span data-i18n="tool_open">Open Tool</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </div>
+      </a>
+    </div>
+
+    <!-- PWA Install Banner -->
+    <div class="pwa-install-banner">
+      <div class="pwa-banner-left">
+        <div class="pwa-banner-icon">
+          <img src="assets/icons/pwa/icon-192x192.png" alt="MR.SALL AI App Icon">
+        </div>
+        <div>
+          <div class="pwa-banner-title gradient-text" data-i18n="install_pwa_title">Install MR.SALL AI App</div>
+          <p class="pwa-banner-desc" data-i18n="install_pwa_desc">Install MR.SALL AI on your device for instant launch, standalone window, and fast offline access.</p>
+        </div>
+      </div>
+      <button type="button" class="btn btn-primary btn-pwa-install" aria-label="Install App">
+        <span>⚡</span> <span data-i18n="install_btn">Install App</span>
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════
+     WHY SECTION
+══════════════════════════════════ -->
+<section class="section-padding" id="why">
+  <div class="container">
+    <div class="section-header">
+      <span class="section-label" data-i18n="why_label">Why Choose Us</span>
+      <h2 class="section-title" data-i18n="why_title">Why MR.SALL AI?</h2>
+      <p class="section-subtitle" data-i18n="why_subtitle">Built for everyone — simple, fast, and free.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <div class="feature-title" data-i18n="feat_simple_title">Simple to Use</div>
+        <p class="feature-desc" data-i18n="feat_simple_desc">Clean, intuitive interface. No learning curve required.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🌍</div>
+        <div class="feature-title" data-i18n="feat_multi_title">Multilingual</div>
+        <p class="feature-desc" data-i18n="feat_multi_desc">Full support for Arabic, English, and French with RTL layout.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🚀</div>
+        <div class="feature-title" data-i18n="feat_fast_title">Lightning Fast</div>
+        <p class="feature-desc" data-i18n="feat_fast_desc">Optimized for speed — get results in seconds.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔒</div>
+        <div class="feature-title" data-i18n="feat_secure_title">Secure</div>
+        <p class="feature-desc" data-i18n="feat_secure_desc">Your data is handled safely. No secrets exposed.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🎁</div>
+        <div class="feature-title" data-i18n="feat_free_title">Free Access</div>
+        <p class="feature-desc" data-i18n="feat_free_desc">All tools are free to use with no hidden charges.</p>
+      </div>
+    </div>
+
+    <!-- Founder Spotlight Banner on Homepage -->
+    <div style="margin-top: 48px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 20px; padding: 28px 32px; display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; box-shadow: var(--shadow-card);">
+      <div style="display: flex; align-items: center; gap: 18px;">
+        <div style="width: 60px; height: 60px; border-radius: 16px; padding: 2px; background: var(--brand-gradient); flex-shrink: 0; box-shadow: 0 0 20px var(--brand-blue-glow);">
+          <img src="assets/mascot.jpg" alt="Salih Abdelqayoum Bachikh - MR.SALL" style="width: 100%; height: 100%; border-radius: 14px; object-fit: cover;">
+        </div>
+        <div>
+          <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--brand-blue);" data-i18n="founder_badge">Creator & Visionary</div>
+          <div style="font-size: 1.25rem; font-weight: 800; color: var(--text-primary); margin: 2px 0;" data-i18n="founder_name">SALIH ABDELQAYOUM BACHIKH</div>
+          <div style="font-size: 0.9rem; color: var(--text-secondary);" data-i18n="founder_tagline">Dream. Learn. Build. Innovate.</div>
+        </div>
+      </div>
+      <a href="founder.html" class="btn btn-primary btn-sm">
+        <span data-i18n="nav_founder">About Founder</span> →
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════
+     FOOTER
+══════════════════════════════════ -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <div class="footer-logo">
+          <img src="assets/logo.png" alt="MR.SALL AI">
+          <span>MR.SALL <span class="gradient-text">AI</span></span>
+        </div>
+        <p class="footer-desc" data-i18n="footer_desc">Your intelligent AI platform. Create, learn, translate, and code — smarter.</p>
+      </div>
+      <div>
+        <div class="footer-col-title" data-i18n="footer_product">Product</div>
+        <ul class="footer-links">
+          <li><a href="tools/chat.html" data-i18n="tool_chat_name">AI Chat</a></li>
+          <li><a href="tools/writer.html" data-i18n="tool_writer_name">AI Writer</a></li>
+          <li><a href="tools/translator.html" data-i18n="tool_translator_name">AI Translator</a></li>
+          <li><a href="tools/study.html" data-i18n="tool_study_name">AI Study</a></li>
+          <li><a href="tools/image.html" data-i18n="tool_image_name">AI Image</a></li>
+          <li><a href="tools/code.html" data-i18n="tool_code_name">AI Code</a></li>
+          <li><a href="tools/pdf.html" data-i18n="tool_pdf_name">PDF Assistant</a></li>
+        </ul>
+      </div>
+      <div>
+        <div class="footer-col-title" data-i18n="footer_company">Company</div>
+        <ul class="footer-links">
+          <li><a href="founder.html" data-i18n="nav_founder">About Founder</a></li>
+          <li><a href="#why" data-i18n="footer_about">About Us</a></li>
+          <li><a href="mailto:contact@mrsall.ai" data-i18n="footer_contact">Contact</a></li>
+        </ul>
+      </div>
+      <div>
+        <div class="footer-col-title" data-i18n="footer_legal">Legal</div>
+        <ul class="footer-links">
+          <li><a href="privacy.html" data-i18n="footer_privacy">Privacy Policy</a></li>
+          <li><a href="terms.html" data-i18n="footer_terms">Terms of Service</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p class="footer-copyright" data-i18n="footer_copyright">© 2024 MR.SALL AI. All rights reserved.</p>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="theme-toggle" style="font-size:14px;width:32px;height:32px;" aria-label="Toggle theme">☀️</button>
+        <select class="lang-select" style="font-size:12px;padding:5px 10px;">
+          <option value="en">EN</option>
+          <option value="ar">AR</option>
+          <option value="fr">FR</option>
+        </select>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- Scripts -->
+<script src="js/theme.js"></script>
+<script src="js/language.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/pwa.js"></script>
+<script src="js/tools.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

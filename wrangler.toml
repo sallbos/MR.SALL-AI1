@@ -1,0 +1,20 @@
+name = "mrsall-ai"
+main = "worker/index.js"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# Configurable daily message limits enforced on the backend
+FREE_DAILY_LIMIT = "50"
+PREMIUM_DAILY_LIMIT = "500"
+
+# KV namespace for persistent daily usage tracking across all Cloudflare isolates.
+# 1. Run: wrangler kv:namespace create USAGE_KV
+# 2. Uncomment and paste the generated namespace ID:
+# [[kv_namespaces]]
+# binding = "USAGE_KV"
+# id = "your_kv_namespace_id_here"
+
+# Required Secrets (set via CLI):
+# wrangler secret put GEMINI_API_KEY
+# wrangler secret put STABILITY_API_KEY (optional, for image generation)

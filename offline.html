@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#080B18">
+  <title>Offline — MR.SALL AI</title>
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="apple-touch-icon" href="assets/icons/pwa/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .offline-container {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      text-align: center;
+      position: relative;
+      z-index: 2;
+    }
+    .offline-card {
+      background: var(--bg-card);
+      border: 1.5px solid var(--border-color);
+      border-radius: 28px;
+      padding: 44px 36px;
+      max-width: 540px;
+      width: 100%;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), var(--shadow-glow);
+      position: relative;
+      overflow: hidden;
+    }
+    .offline-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--brand-gradient);
+    }
+    .offline-mascot-frame {
+      width: 110px;
+      height: 110px;
+      border-radius: 28px;
+      padding: 3px;
+      background: var(--brand-gradient);
+      box-shadow: 0 0 35px var(--brand-blue-glow);
+      margin: 0 auto 24px;
+      position: relative;
+    }
+    .offline-mascot-img {
+      width: 100%;
+      height: 100%;
+      border-radius: 25px;
+      object-fit: cover;
+      filter: grayscale(0.2) contrast(1.1);
+    }
+    .offline-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      color: #ef4444;
+      border-radius: 100px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 18px;
+    }
+    .offline-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ef4444;
+      box-shadow: 0 0 8px #ef4444;
+    }
+    .offline-notice-box {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 16px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin: 22px 0 28px;
+      text-align: left;
+    }
+    [dir="rtl"] .offline-notice-box {
+      text-align: right;
+    }
+    .offline-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+  </style>
+</head>
+<body class="login-body">
+
+  <div class="hero-bg"></div>
+  <div class="hero-grid"></div>
+
+  <!-- Topbar -->
+  <header class="login-topbar">
+    <a href="index.html" class="nav-logo">
+      <img src="assets/logo.png" alt="MR.SALL AI" class="nav-logo-img">
+      <div class="nav-logo-text"><span>MR.SALL </span><span class="ai-badge">AI</span></div>
+    </a>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <select class="lang-select" aria-label="Language">
+        <option value="en">🌐 EN</option>
+        <option value="ar">🌐 AR</option>
+        <option value="fr">🌐 FR</option>
+      </select>
+      <button class="theme-toggle" aria-label="Toggle theme">☀️</button>
+    </div>
+  </header>
+
+  <div class="offline-container">
+    <div class="offline-card">
+      <!-- Mascot frame -->
+      <div class="offline-mascot-frame">
+        <img src="assets/mascot.jpg" alt="MR.SALL AI Offline" class="offline-mascot-img">
+      </div>
+
+      <!-- Badge -->
+      <div class="offline-status-badge">
+        <span class="offline-dot"></span>
+        <span data-i18n="offline_badge">You are currently offline</span>
+      </div>
+
+      <!-- Title -->
+      <h1 style="font-size: clamp(1.6rem, 4vw, 2.2rem); font-weight: 800; margin-bottom: 10px;" class="gradient-text" data-i18n="offline_title">
+        No Internet Connection
+      </h1>
+
+      <p style="color: var(--text-secondary); font-size: 0.95rem; line-height: 1.6;" data-i18n="offline_desc">
+        MR.SALL AI requires an active internet connection to process prompts and communicate with the AI engine.
+      </p>
+
+      <div class="offline-notice-box">
+        <div style="font-weight: 700; color: var(--text-primary); margin-bottom: 6px; display: flex; align-items: center; gap: 8px;">
+          <span>⚡</span> <span data-i18n="offline_notice_title">Cloud AI Connectivity</span>
+        </div>
+        <p style="margin: 0;" data-i18n="offline_notice_text">
+          Cached platform pages remain accessible, but generative tools (AI Chat, Writer, Translator, Code, Study, Image, PDF) cannot generate responses while offline.
+        </p>
+      </div>
+
+      <div class="offline-actions">
+        <button id="retry-btn" class="btn btn-primary">
+          <span>🔄</span> <span data-i18n="offline_retry">Check Connection</span>
+        </button>
+        <a href="index.html" class="btn btn-secondary" data-i18n="offline_dashboard">
+          Go to Dashboard
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/theme.js"></script>
+  <script src="js/language.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Auto-detect when online status restores
+      window.addEventListener('online', () => {
+        window.location.reload();
+      });
+
+      const retryBtn = document.getElementById('retry-btn');
+      retryBtn.addEventListener('click', async () => {
+        retryBtn.disabled = true;
+        retryBtn.innerHTML = '<span>⏳</span> <span>Connecting...</span>';
+        try {
+          const res = await fetch('assets/favicon.png?t=' + Date.now(), { cache: 'no-store' });
+          if (res.ok) {
+            window.location.href = 'index.html';
+            return;
+          }
+        } catch (e) {
+          // Still offline
+        }
+        setTimeout(() => {
+          retryBtn.disabled = false;
+          retryBtn.innerHTML = '<span>🔄</span> <span>' + (LanguageManager.t('offline_retry') || 'Check Connection') + '</span>';
+          alert(LanguageManager.t('offline_still') || 'Still offline. Please check your WiFi or mobile data connection.');
+        }, 800);
+      });
+    });
+  </script>
+</body>
+</html>
