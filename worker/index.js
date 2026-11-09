@@ -123,7 +123,7 @@ function corsHeaders(origin, extraHeaders = {}) {
   return {
     'Access-Control-Allow-Origin': origin || '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-User-Id, X-User-Tier, X-User-Email',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-User-Id, X-User-Tier, X-User-Email, X-Stream',
     'Access-Control-Expose-Headers': 'X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, X-User-Tier',
     'Access-Control-Max-Age': '86400',
     ...extraHeaders,
@@ -150,6 +150,10 @@ const GEMINI_CONFIG = {
   model: 'gemini-3.8-flash',
   apiVersion: 'v1beta',
   maxOutputTokens: 2048,
+  // Hard timeout for every Gemini fetch call.
+  // Cloudflare Workers enforce a ~30s wall-clock limit on outbound requests.
+  // We abort at 25s to return a clean error before Cloudflare issues HTTP 524.
+  fetchTimeoutMs: 25000,
 };
 
 /**
@@ -184,14 +188,30 @@ function resolveGeminiApiKey(env, request) {
 }
 
 /**
- * Construct the official Google Gemini API endpoint for content generation
+ * Construct the official Google Gemini API endpoint for content generation (non-streaming)
  */
 function getGeminiEndpoint(apiKey) {
   return `https://generativelanguage.googleapis.com/${GEMINI_CONFIG.apiVersion}/models/${GEMINI_CONFIG.model}:generateContent?key=${apiKey}`;
 }
 
-// ── Gemini API Call with Exponential Backoff Retries ──
-async function callGemini(env, promptOrContents, systemInstruction = '', request = null, maxRetries = 3) {
+/**
+ * Construct the Google Gemini streaming endpoint (Server-Sent Events)
+ */
+function getGeminiStreamEndpoint(apiKey) {
+  return `https://generativelanguage.googleapis.com/${GEMINI_CONFIG.apiVersion}/models/${GEMINI_CONFIG.model}:streamGenerateContent?alt=sse&key=${apiKey}`;
+}
+
+// ── Gemini API Call with Timeout and Limited Retries ──
+//
+// Design decisions vs. previous implementation:
+//  - AbortController enforces a 25s timeout on every fetch().
+//    If Gemini hasn't responded in 25s, we abort and return HTTP 504 to the caller
+//    BEFORE Cloudflare's own 30s limit kills the Worker and returns HTTP 524 to the browser.
+//  - Retries are reduced to max 1 extra attempt (2 total).
+//    HTTP 524 chains were caused by 4 attempts of a slow Gemini model (4 × slow = very long).
+//    We only retry on true transient overload codes (429, 500, 502, 503), never on timeouts.
+//  - On timeout, the error message is immediately surfaced to the user instead of retrying.
+async function callGemini(env, promptOrContents, systemInstruction = '', request = null, maxRetries = 1) {
   const apiKey = resolveGeminiApiKey(env, request);
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY is not configured in Cloudflare Worker Secrets.');
@@ -223,7 +243,11 @@ async function callGemini(env, promptOrContents, systemInstruction = '', request
 
   while (attempt <= maxRetries) {
     attempt++;
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => controller.abort(), GEMINI_CONFIG.fetchTimeoutMs);
+
     try {
+      const startMs = Date.now();
       const res = await fetch(endpointUrl, {
         method: 'POST',
         headers: {
@@ -231,7 +255,11 @@ async function callGemini(env, promptOrContents, systemInstruction = '', request
           'x-goog-api-key': apiKey,
         },
         body: JSON.stringify(body),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutHandle);
+      const elapsedMs = Date.now() - startMs;
+      console.log(`[Gemini] Attempt ${attempt}: HTTP ${res.status} in ${elapsedMs}ms`);
 
       if (res.ok) {
         const data = await res.json();
@@ -257,8 +285,8 @@ async function callGemini(env, promptOrContents, systemInstruction = '', request
       const rawErr = await res.text();
       const safeErr = sanitizeErrorMessage(rawErr, apiKey);
 
-      // Check if transient error eligible for retry (HTTP 503, 429, 500, 502, 504)
-      const isTransient = [429, 500, 502, 503, 504].includes(res.status);
+      // Only retry on true transient overload (never on timeout — that would compound 524s)
+      const isTransient = [429, 500, 502, 503].includes(res.status);
       if (isTransient && attempt <= maxRetries) {
         const delay = (baseDelayMs * Math.pow(2, attempt - 1)) + Math.floor(Math.random() * 400);
         console.warn(`[Gemini Retry] HTTP ${res.status} on attempt ${attempt}/${maxRetries}. Retrying in ${delay}ms...`);
@@ -286,9 +314,24 @@ async function callGemini(env, promptOrContents, systemInstruction = '', request
       throw new Error(userMessage);
 
     } catch (err) {
+      clearTimeout(timeoutHandle);
       lastError = err;
+
+      // AbortError = our 25s timeout fired — do NOT retry, return immediately
+      if (err.name === 'AbortError') {
+        throw new Error(
+          `AI request timed out after ${Math.round(GEMINI_CONFIG.fetchTimeoutMs / 1000)}s. ` +
+          'Google Gemini is responding slowly. Please try a shorter message or try again in a moment.'
+        );
+      }
+
       // If it's a transient network/fetch failure and retries remain, back off and retry
-      if (attempt <= maxRetries && (!err.message || (!err.message.includes('HTTP 400') && !err.message.includes('HTTP 401') && !err.message.includes('HTTP 403') && !err.message.includes('HTTP 404')))) {
+      if (attempt <= maxRetries && (!err.message || (
+        !err.message.includes('HTTP 400') &&
+        !err.message.includes('HTTP 401') &&
+        !err.message.includes('HTTP 403') &&
+        !err.message.includes('HTTP 404')
+      ))) {
         const delay = (baseDelayMs * Math.pow(2, attempt - 1)) + Math.floor(Math.random() * 400);
         console.warn(`[Gemini Retry] Network exception on attempt ${attempt}/${maxRetries}: ${err.message}. Retrying in ${delay}ms...`);
         await new Promise(r => setTimeout(r, delay));
@@ -298,12 +341,140 @@ async function callGemini(env, promptOrContents, systemInstruction = '', request
     }
   }
 
-  throw lastError || new Error(`Gemini request failed after ${maxRetries} retries.`);
+  throw lastError || new Error(`Gemini request failed after ${maxRetries + 1} attempts.`);
+}
+
+/**
+ * Handle a streaming chat request via streamGenerateContent (Server-Sent Events).
+ *
+ * Returns a streaming Response so the browser receives tokens progressively.
+ * This keeps the Cloudflare Worker connection alive (the Worker proxies the stream from Google),
+ * preventing HTTP 524 timeout errors caused by waiting for a full Gemini response.
+ *
+ * Stream format sent to client:
+ *   data: {"token":"Hello"}\n\n       — incremental text token
+ *   data: {"done":true,"elapsed":1234}\n\n  — final chunk with timing
+ *   data: {"error":"message"}\n\n     — error chunk
+ */
+async function streamGeminiChat(env, contents, systemInstruction, request, origin) {
+  const apiKey = resolveGeminiApiKey(env, request);
+  if (!apiKey) {
+    return jsonResponse({
+      error: true,
+      code: 'MISSING_GEMINI_API_KEY',
+      message: 'AI service is not configured. Please set GEMINI_API_KEY in Cloudflare Worker secrets.',
+    }, 503, origin);
+  }
+
+  const streamUrl = getGeminiStreamEndpoint(apiKey);
+  const body = {
+    contents,
+    generationConfig: { maxOutputTokens: GEMINI_CONFIG.maxOutputTokens },
+  };
+  if (systemInstruction) {
+    body.systemInstruction = { parts: [{ text: systemInstruction }] };
+  }
+
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), GEMINI_CONFIG.fetchTimeoutMs);
+  const startMs = Date.now();
+
+  let geminiRes;
+  try {
+    geminiRes = await fetch(streamUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (fetchErr) {
+    clearTimeout(timeoutHandle);
+    const isTimeout = fetchErr.name === 'AbortError';
+    const msg = isTimeout
+      ? `AI request timed out after ${Math.round(GEMINI_CONFIG.fetchTimeoutMs / 1000)}s. Please try a shorter message or try again.`
+      : sanitizeErrorMessage(fetchErr.message, apiKey);
+    return jsonResponse({ error: true, message: msg }, isTimeout ? 504 : 503, origin);
+  }
+
+  if (!geminiRes.ok) {
+    clearTimeout(timeoutHandle);
+    const rawErr = await geminiRes.text();
+    const safeErr = sanitizeErrorMessage(rawErr, apiKey);
+    return jsonResponse({ error: true, message: `Gemini error (HTTP ${geminiRes.status}): ${safeErr}` }, geminiRes.status, origin);
+  }
+
+  // Pipe the Google SSE stream through to the browser as our own SSE stream
+  const { readable, writable } = new TransformStream();
+  const writer = writable.getWriter();
+  const encoder = new TextEncoder();
+
+  // Process the SSE stream from Google asynchronously
+  (async () => {
+    const reader = geminiRes.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // SSE lines: "data: {...}\n\n"
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data:')) continue;
+          const jsonStr = trimmed.slice(5).trim();
+          if (jsonStr === '[DONE]') continue;
+          try {
+            const chunk = JSON.parse(jsonStr);
+            const parts = chunk?.candidates?.[0]?.content?.parts || [];
+            for (const part of parts) {
+              if (part && typeof part.text === 'string' && !part.thought) {
+                await writer.write(encoder.encode(`data: ${JSON.stringify({ token: part.text })}\n\n`));
+              }
+            }
+          } catch {
+            // Ignore malformed SSE chunks
+          }
+        }
+      }
+
+      clearTimeout(timeoutHandle);
+      const elapsed = Date.now() - startMs;
+      await writer.write(encoder.encode(`data: ${JSON.stringify({ done: true, elapsed })}\n\n`));
+    } catch (streamErr) {
+      clearTimeout(timeoutHandle);
+      const isTimeout = streamErr.name === 'AbortError';
+      const msg = isTimeout
+        ? `AI response timed out after ${Math.round(GEMINI_CONFIG.fetchTimeoutMs / 1000)}s. Please try a shorter message.`
+        : sanitizeErrorMessage(streamErr.message, apiKey);
+      await writer.write(encoder.encode(`data: ${JSON.stringify({ error: msg })}\n\n`));
+    } finally {
+      await writer.close().catch(() => {});
+    }
+  })();
+
+  return new Response(readable, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      ...corsHeaders(origin),
+    },
+  });
 }
 
 // ── Tool Handlers ──
 
-// 1. Chat API Handler (Supports multi-turn)
+// 1. Chat API Handler (Supports multi-turn, streams via SSE)
 async function handleChat(request, env, origin, usageHeaders) {
   const { messages } = await request.json();
   if (!Array.isArray(messages) || messages.length === 0) {
@@ -311,17 +482,57 @@ async function handleChat(request, env, origin, usageHeaders) {
   }
 
   // Map messages to Gemini multi-turn format (last 12 turns)
-  const formattedContents = messages
+  const rawContents = messages
     .slice(-12)
-    .filter(m => m && typeof m.content === 'string')
+    .filter(m => m && typeof m.content === 'string' && m.content.trim())
     .map(m => ({
       role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }]
+      parts: [{ text: m.content.trim() }]
     }));
+
+  // Google Gemini requires the first turn to have role 'user'
+  while (rawContents.length > 0 && rawContents[0].role !== 'user') {
+    rawContents.shift();
+  }
+
+  // Google Gemini requires roles to strictly alternate between 'user' and 'model'
+  const formattedContents = [];
+  for (const item of rawContents) {
+    if (formattedContents.length > 0 && formattedContents[formattedContents.length - 1].role === item.role) {
+      formattedContents[formattedContents.length - 1].parts[0].text += `\n\n${item.parts[0].text}`;
+    } else {
+      formattedContents.push(item);
+    }
+  }
+
+  // Fallback to latest message if empty
+  if (formattedContents.length === 0) {
+    const last = messages[messages.length - 1];
+    formattedContents.push({
+      role: 'user',
+      parts: [{ text: String(last?.content || 'Hello') }]
+    });
+  }
 
   const systemInstruction = `You are MR.SALL AI, an intelligent, helpful, and versatile AI assistant created by SALIH ABDELQAYOUM BACHIKH. 
 Be concise, accurate, polite, and helpful. Always respond in the language used by the user (Arabic, English, or French).`;
 
+  // Detect if the client supports SSE streaming (sent X-Stream: true header)
+  const wantsStream = request.headers.get('X-Stream') === 'true';
+
+  if (wantsStream) {
+    // Streaming path: tokens arrive progressively, preventing HTTP 524 timeouts.
+    // usageHeaders are added as custom SSE headers on the initial response.
+    const streamRes = await streamGeminiChat(env, formattedContents, systemInstruction, request, origin);
+    // Inject rate-limit headers into the streaming response
+    const newHeaders = new Headers(streamRes.headers);
+    for (const [k, v] of Object.entries(usageHeaders)) {
+      newHeaders.set(k, v);
+    }
+    return new Response(streamRes.body, { status: streamRes.status, headers: newHeaders });
+  }
+
+  // Non-streaming fallback (used by other tools and health checks)
   const content = await callGemini(env, formattedContents, systemInstruction, request);
   return jsonResponse({ content }, 200, origin, usageHeaders);
 }
