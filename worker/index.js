@@ -350,18 +350,18 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const origin = request.headers.get('Origin');
+    const path = url.pathname;
 
     // 1. Handle CORS preflight
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: corsHeaders(origin) });
     }
 
-    const { userId, tier, limit, freeLimit, premiumLimit } = resolveUserLimits(env, request);
-    const today = getTodayDateKey();
-    const resetSeconds = getSecondsUntilMidnightUTC();
-
-    // 2. Health check endpoint (GET / or GET /api/health)
-    if (request.method === 'GET' && (url.pathname === '/api/health' || url.pathname === '/')) {
+    // 2. Health check endpoint (GET /api/health)
+    if (request.method === 'GET' && path === '/api/health') {
+      const resetSeconds = getSecondsUntilMidnightUTC();
+      const freeLimit = parseInt(env.FREE_DAILY_LIMIT || '50', 10);
+      const premiumLimit = parseInt(env.PREMIUM_DAILY_LIMIT || '500', 10);
       return jsonResponse({
         status: 'ok',
         service: 'MR.SALL AI Platform',
@@ -379,7 +379,10 @@ export default {
     }
 
     // 3. User usage status query endpoint (/api/usage) - DOES NOT consume a message credit
-    if (url.pathname === '/api/usage') {
+    if (path === '/api/usage') {
+      const { userId, tier, limit } = resolveUserLimits(env, request);
+      const today = getTodayDateKey();
+      const resetSeconds = getSecondsUntilMidnightUTC();
       const currentUsage = await getDailyUsage(env, userId, today);
       const remaining = Math.max(0, limit - currentUsage);
       const usageHeaders = {
@@ -399,80 +402,120 @@ export default {
       }, 200, origin, usageHeaders);
     }
 
-    // Only allow POST for AI tool endpoints
-    if (request.method !== 'POST') {
-      return errorResponse('Method not allowed', 405, origin);
-    }
+    // 4. API Tool Endpoints (all /api/* requests)
+    if (path.startsWith('/api/')) {
+      if (request.method !== 'POST') {
+        return errorResponse('Method not allowed', 405, origin);
+      }
 
-    // 4. Short-term IP burst rate limiting (30 requests/minute)
-    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-    if (!checkBurstRateLimit(ip, 30, 60000)) {
-      return errorResponse('Rate limit exceeded. Please wait a moment before sending more requests.', 429, origin);
-    }
+      // Short-term IP burst rate limiting (30 requests/minute)
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+      if (!checkBurstRateLimit(ip, 30, 60000)) {
+        return errorResponse('Rate limit exceeded. Please wait a moment before sending more requests.', 429, origin);
+      }
 
-    // 5. Backend-enforced Daily Usage Limits Check
-    const currentUsage = await getDailyUsage(env, userId, today);
-    if (currentUsage >= limit) {
+      const { userId, tier, limit } = resolveUserLimits(env, request);
+      const today = getTodayDateKey();
+      const resetSeconds = getSecondsUntilMidnightUTC();
+
+      // Backend-enforced Daily Usage Limits Check
+      const currentUsage = await getDailyUsage(env, userId, today);
+      if (currentUsage >= limit) {
+        const usageHeaders = {
+          'X-RateLimit-Limit': String(limit),
+          'X-RateLimit-Remaining': '0',
+          'X-RateLimit-Reset': String(resetSeconds),
+          'X-User-Tier': tier,
+        };
+        return jsonResponse({
+          error: true,
+          code: 'DAILY_LIMIT_EXCEEDED',
+          message: `Daily limit of ${limit} requests reached. Your quota resets at midnight UTC.`,
+          limit,
+          used: currentUsage,
+          remaining: 0,
+          reset_seconds: resetSeconds,
+          tier,
+        }, 429, origin, usageHeaders);
+      }
+
+      // Verify Gemini API key configuration
+      if (!env.GEMINI_API_KEY && path !== '/api/image') {
+        return errorResponse('AI service is not configured on the server. Please add GEMINI_API_KEY to Worker secrets.', 503, origin);
+      }
+
+      // Prepare response usage headers for successful requests
+      const newUsage = currentUsage + 1;
+      const remainingAfter = Math.max(0, limit - newUsage);
       const usageHeaders = {
         'X-RateLimit-Limit': String(limit),
-        'X-RateLimit-Remaining': '0',
+        'X-RateLimit-Remaining': String(remainingAfter),
         'X-RateLimit-Reset': String(resetSeconds),
         'X-User-Tier': tier,
       };
-      return jsonResponse({
-        error: true,
-        code: 'DAILY_LIMIT_EXCEEDED',
-        message: `Daily limit of ${limit} requests reached. Your quota resets at midnight UTC.`,
-        limit,
-        used: currentUsage,
-        remaining: 0,
-        reset_seconds: resetSeconds,
-        tier,
-      }, 429, origin, usageHeaders);
-    }
 
-    // 6. Verify Gemini API key configuration
-    if (!env.GEMINI_API_KEY && url.pathname !== '/api/image') {
-      return errorResponse('AI service is not configured on the server. Please add GEMINI_API_KEY to Worker secrets.', 503, origin);
-    }
+      try {
+        let response;
+        if (path === '/api/chat') response = await handleChat(request, env, origin, usageHeaders);
+        else if (path === '/api/write') response = await handleWrite(request, env, origin, usageHeaders);
+        else if (path === '/api/translate') response = await handleTranslate(request, env, origin, usageHeaders);
+        else if (path === '/api/study') response = await handleStudy(request, env, origin, usageHeaders);
+        else if (path === '/api/image') response = await handleImage(request, env, origin, usageHeaders);
+        else if (path === '/api/code') response = await handleCode(request, env, origin, usageHeaders);
+        else if (path === '/api/pdf') response = await handlePDF(request, env, origin, usageHeaders);
+        else return errorResponse('API endpoint not found', 404, origin, usageHeaders);
 
-    // Prepare response usage headers for successful requests
-    const newUsage = currentUsage + 1;
-    const remainingAfter = Math.max(0, limit - newUsage);
-    const usageHeaders = {
-      'X-RateLimit-Limit': String(limit),
-      'X-RateLimit-Remaining': String(remainingAfter),
-      'X-RateLimit-Reset': String(resetSeconds),
-      'X-User-Tier': tier,
-    };
+        // On successful processing, record the incremented daily usage
+        if (response && response.status === 200) {
+          await recordDailyUsage(env, userId, today, newUsage);
+        }
 
-    try {
-      const path = url.pathname;
-      let response;
-
-      if (path === '/api/chat') response = await handleChat(request, env, origin, usageHeaders);
-      else if (path === '/api/write') response = await handleWrite(request, env, origin, usageHeaders);
-      else if (path === '/api/translate') response = await handleTranslate(request, env, origin, usageHeaders);
-      else if (path === '/api/study') response = await handleStudy(request, env, origin, usageHeaders);
-      else if (path === '/api/image') response = await handleImage(request, env, origin, usageHeaders);
-      else if (path === '/api/code') response = await handleCode(request, env, origin, usageHeaders);
-      else if (path === '/api/pdf') response = await handlePDF(request, env, origin, usageHeaders);
-      else return errorResponse('API endpoint not found', 404, origin, usageHeaders);
-
-      // On successful processing, record the incremented daily usage
-      if (response && response.status === 200) {
-        await recordDailyUsage(env, userId, today, newUsage);
+        return response;
+      } catch (err) {
+        console.error('Worker processing error:', err);
+        return errorResponse(
+          err.message || 'AI service temporarily unavailable. Please try again.',
+          500,
+          origin,
+          usageHeaders
+        );
       }
-
-      return response;
-    } catch (err) {
-      console.error('Worker processing error:', err);
-      return errorResponse(
-        err.message || 'AI service temporarily unavailable. Please try again.',
-        500,
-        origin,
-        usageHeaders
-      );
     }
+
+    // 5. Frontend & Static Assets (GET / and all other non-API routes)
+    // Cloudflare Workers Static Assets binding (env.ASSETS) serves index.html,
+    // login.html, founder.html, privacy.html, CSS, JS, tools, and PWA assets.
+    if (env.ASSETS && typeof env.ASSETS.fetch === 'function') {
+      try {
+        let assetRes = await env.ASSETS.fetch(request);
+
+        // Pretty URLs fallback: if 404 and path has no file extension (e.g. /login, /founder)
+        if (assetRes.status === 404 && !path.includes('.')) {
+          const prettyPath = `${path.replace(/\/+$/, '')}.html`;
+          const prettyUrl = new URL(prettyPath, request.url);
+          const prettyRes = await env.ASSETS.fetch(new Request(prettyUrl, request));
+          if (prettyRes.ok) {
+            assetRes = prettyRes;
+          }
+        }
+
+        // Add Service-Worker-Allowed header if serving service-worker.js
+        if (path === '/service-worker.js' || path.endsWith('/service-worker.js')) {
+          const newHeaders = new Headers(assetRes.headers);
+          newHeaders.set('Service-Worker-Allowed', '/');
+          return new Response(assetRes.body, {
+            status: assetRes.status,
+            statusText: assetRes.statusText,
+            headers: newHeaders,
+          });
+        }
+
+        return assetRes;
+      } catch (assetErr) {
+        console.error('Error fetching static asset:', assetErr);
+      }
+    }
+
+    return new Response('Not Found', { status: 404, headers: { 'Content-Type': 'text/plain' } });
   },
 };
