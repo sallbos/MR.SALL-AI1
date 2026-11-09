@@ -165,19 +165,39 @@ function sanitizeErrorMessage(errMsg, apiKey) {
 }
 
 /**
+ * Resolve the Gemini API key from Cloudflare Worker secrets or request headers
+ */
+function resolveGeminiApiKey(env, request) {
+  // 1. Worker secrets and environment variables
+  const envKey = env.GEMINI_API_KEY || env.GOOGLE_API_KEY || env.GEMINI_KEY || env.GEMINI_APIKEY;
+  if (envKey && typeof envKey === 'string' && envKey.trim()) {
+    return envKey.trim();
+  }
+  // 2. Request headers (supports custom client key from Settings modal)
+  if (request && typeof request.headers?.get === 'function') {
+    const headerKey = request.headers.get('X-Gemini-API-Key') || request.headers.get('x-api-key');
+    if (headerKey && typeof headerKey === 'string' && headerKey.trim()) {
+      return headerKey.trim();
+    }
+  }
+  return null;
+}
+
+/**
  * Construct the official Google Gemini API endpoint for content generation
  */
 function getGeminiEndpoint(apiKey) {
   return `https://generativelanguage.googleapis.com/${GEMINI_CONFIG.apiVersion}/models/${GEMINI_CONFIG.model}:generateContent?key=${apiKey}`;
 }
 
-// ── Gemini API Call ──
-async function callGemini(env, promptOrContents, systemInstruction = '') {
-  if (!env.GEMINI_API_KEY) {
+// ── Gemini API Call with Exponential Backoff Retries ──
+async function callGemini(env, promptOrContents, systemInstruction = '', request = null, maxRetries = 3) {
+  const apiKey = resolveGeminiApiKey(env, request);
+  if (!apiKey) {
     throw new Error('GEMINI_API_KEY is not configured in Cloudflare Worker Secrets.');
   }
 
-  const endpointUrl = getGeminiEndpoint(env.GEMINI_API_KEY);
+  const endpointUrl = getGeminiEndpoint(apiKey);
 
   let contents;
   if (Array.isArray(promptOrContents)) {
@@ -197,54 +217,88 @@ async function callGemini(env, promptOrContents, systemInstruction = '') {
     body.systemInstruction = { parts: [{ text: systemInstruction }] };
   }
 
-  const res = await fetch(endpointUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': env.GEMINI_API_KEY,
-    },
-    body: JSON.stringify(body),
-  });
+  let attempt = 0;
+  const baseDelayMs = 1000;
+  let lastError = null;
 
-  if (!res.ok) {
-    const rawErr = await res.text();
-    const safeErr = sanitizeErrorMessage(rawErr, env.GEMINI_API_KEY);
+  while (attempt <= maxRetries) {
+    attempt++;
+    try {
+      const res = await fetch(endpointUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey,
+        },
+        body: JSON.stringify(body),
+      });
 
-    let userMessage = `Gemini API error (HTTP ${res.status}): ${safeErr}`;
-    if (res.status === 400) {
-      userMessage = `Gemini API request was invalid (HTTP 400): ${safeErr}`;
-    } else if (res.status === 401) {
-      userMessage = 'Unauthorized (HTTP 401): Invalid GEMINI_API_KEY. Please verify your Cloudflare Worker secret.';
-    } else if (res.status === 403) {
-      userMessage = `Forbidden (HTTP 403): Your GEMINI_API_KEY lacks permissions or region access for ${GEMINI_CONFIG.model}.`;
-    } else if (res.status === 404) {
-      userMessage = `Model not found (HTTP 404): Endpoint for '${GEMINI_CONFIG.model}' was not found for API version ${GEMINI_CONFIG.apiVersion}.`;
-    } else if (res.status === 429) {
-      userMessage = 'Google Gemini rate limit exceeded (HTTP 429). Please wait a moment and try again.';
-    } else if (res.status >= 500) {
-      userMessage = `Google Gemini service temporarily unavailable (HTTP ${res.status}). Service is experiencing downtime.`;
+      if (res.ok) {
+        const data = await res.json();
+        const parts = data?.candidates?.[0]?.content?.parts || [];
+        const textParts = parts
+          .filter(p => p && typeof p.text === 'string' && !p.thought)
+          .map(p => p.text);
+
+        const text = textParts.length > 0
+          ? textParts.join('\n')
+          : parts.map(p => p.text || '').filter(Boolean).join('\n');
+
+        if (!text) {
+          const blockReason = data?.promptFeedback?.blockReason || data?.candidates?.[0]?.finishReason;
+          if (blockReason) {
+            throw new Error(`Gemini response blocked or incomplete: ${blockReason}`);
+          }
+          throw new Error('Empty response from Gemini');
+        }
+        return text;
+      }
+
+      const rawErr = await res.text();
+      const safeErr = sanitizeErrorMessage(rawErr, apiKey);
+
+      // Check if transient error eligible for retry (HTTP 503, 429, 500, 502, 504)
+      const isTransient = [429, 500, 502, 503, 504].includes(res.status);
+      if (isTransient && attempt <= maxRetries) {
+        const delay = (baseDelayMs * Math.pow(2, attempt - 1)) + Math.floor(Math.random() * 400);
+        console.warn(`[Gemini Retry] HTTP ${res.status} on attempt ${attempt}/${maxRetries}. Retrying in ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+
+      // Format clear diagnostic error based on Google status code
+      let userMessage = `Gemini API error (HTTP ${res.status}): ${safeErr}`;
+      if (res.status === 400) {
+        userMessage = `Gemini API request was invalid (HTTP 400): ${safeErr}`;
+      } else if (res.status === 401) {
+        userMessage = 'Unauthorized (HTTP 401): Invalid GEMINI_API_KEY. Please verify your Cloudflare Worker secret.';
+      } else if (res.status === 403) {
+        userMessage = `Forbidden (HTTP 403): Your GEMINI_API_KEY lacks permissions or region access for ${GEMINI_CONFIG.model}. (${safeErr})`;
+      } else if (res.status === 404) {
+        userMessage = `Model not found (HTTP 404): Endpoint for '${GEMINI_CONFIG.model}' was not found. (${safeErr})`;
+      } else if (res.status === 429) {
+        userMessage = `Google Gemini rate limit exceeded (HTTP 429) after ${attempt} attempts: ${safeErr}`;
+      } else if (res.status === 503) {
+        userMessage = `Google Gemini service temporarily overloaded (HTTP 503) after ${attempt} attempts: ${safeErr}`;
+      } else if (res.status >= 500) {
+        userMessage = `Google Gemini service error (HTTP ${res.status}) after ${attempt} attempts. (${safeErr})`;
+      }
+      throw new Error(userMessage);
+
+    } catch (err) {
+      lastError = err;
+      // If it's a transient network/fetch failure and retries remain, back off and retry
+      if (attempt <= maxRetries && (!err.message || (!err.message.includes('HTTP 400') && !err.message.includes('HTTP 401') && !err.message.includes('HTTP 403') && !err.message.includes('HTTP 404')))) {
+        const delay = (baseDelayMs * Math.pow(2, attempt - 1)) + Math.floor(Math.random() * 400);
+        console.warn(`[Gemini Retry] Network exception on attempt ${attempt}/${maxRetries}: ${err.message}. Retrying in ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      throw err;
     }
-    throw new Error(userMessage);
   }
 
-  const data = await res.json();
-  const parts = data?.candidates?.[0]?.content?.parts || [];
-  const textParts = parts
-    .filter(p => p && typeof p.text === 'string' && !p.thought)
-    .map(p => p.text);
-
-  const text = textParts.length > 0
-    ? textParts.join('\n')
-    : parts.map(p => p.text || '').filter(Boolean).join('\n');
-
-  if (!text) {
-    const blockReason = data?.promptFeedback?.blockReason || data?.candidates?.[0]?.finishReason;
-    if (blockReason) {
-      throw new Error(`Gemini response blocked or incomplete: ${blockReason}`);
-    }
-    throw new Error('Empty response from Gemini');
-  }
-  return text;
+  throw lastError || new Error(`Gemini request failed after ${maxRetries} retries.`);
 }
 
 // ── Tool Handlers ──
@@ -268,7 +322,7 @@ async function handleChat(request, env, origin, usageHeaders) {
   const systemInstruction = `You are MR.SALL AI, an intelligent, helpful, and versatile AI assistant created by SALIH ABDELQAYOUM BACHIKH. 
 Be concise, accurate, polite, and helpful. Always respond in the language used by the user (Arabic, English, or French).`;
 
-  const content = await callGemini(env, formattedContents, systemInstruction);
+  const content = await callGemini(env, formattedContents, systemInstruction, request);
   return jsonResponse({ content }, 200, origin, usageHeaders);
 }
 
@@ -289,7 +343,7 @@ async function handleWrite(request, env, origin, usageHeaders) {
   };
 
   const prompt = prompts[type] || prompts.article;
-  const content = await callGemini(env, prompt);
+  const content = await callGemini(env, prompt, '', request);
   return jsonResponse({ content }, 200, origin, usageHeaders);
 }
 
@@ -305,7 +359,7 @@ async function handleTranslate(request, env, origin, usageHeaders) {
   const prompt = `Translate the following text from ${fromName} to ${toName}. 
 Preserve natural tone, idioms, and context. Return ONLY the translation, nothing else.\n\nText:\n${text}`;
 
-  const content = await callGemini(env, prompt);
+  const content = await callGemini(env, prompt, '', request);
   return jsonResponse({ content }, 200, origin, usageHeaders);
 }
 
@@ -326,7 +380,7 @@ async function handleStudy(request, env, origin, usageHeaders) {
   };
 
   const prompt = prompts[mode] || prompts.explain;
-  const result = await callGemini(env, prompt);
+  const result = await callGemini(env, prompt, '', request);
   return jsonResponse({ content: result }, 200, origin, usageHeaders);
 }
 
@@ -387,7 +441,7 @@ async function handleCode(request, env, origin, usageHeaders) {
   };
 
   const prompt = prompts[mode] || prompts.generate;
-  const content = await callGemini(env, prompt);
+  const content = await callGemini(env, prompt, '', request);
   return jsonResponse({ content }, 200, origin, usageHeaders);
 }
 
@@ -403,7 +457,7 @@ async function handlePDF(request, env, origin, usageHeaders) {
   };
 
   const prompt = prompts[action] || prompts.summarize;
-  const content = await callGemini(env, prompt);
+  const content = await callGemini(env, prompt, '', request);
   return jsonResponse({ content }, 200, origin, usageHeaders);
 }
 
@@ -419,17 +473,69 @@ export default {
       return new Response(null, { status: 204, headers: corsHeaders(origin) });
     }
 
-    // 2. Health check endpoint (GET /api/health)
+    // 2. Health check & Diagnostic endpoint (GET /api/health)
     if (request.method === 'GET' && path === '/api/health') {
       const resetSeconds = getSecondsUntilMidnightUTC();
       const freeLimit = parseInt(env.FREE_DAILY_LIMIT || '50', 10);
       const premiumLimit = parseInt(env.PREMIUM_DAILY_LIMIT || '500', 10);
+      const activeApiKey = resolveGeminiApiKey(env, request);
+
+      // Interactive real-time test from Cloudflare Worker: GET /api/health?test=true
+      if (url.searchParams.get('test') === 'true' || url.searchParams.get('diagnostic') === 'true') {
+        const testDetails = {
+          model: GEMINI_CONFIG.model,
+          api_version: GEMINI_CONFIG.apiVersion,
+          api_key_configured: Boolean(activeApiKey),
+          api_key_masked: activeApiKey ? `${activeApiKey.slice(0, 6)}...${activeApiKey.slice(-4)}` : 'MISSING',
+        };
+
+        if (!activeApiKey) {
+          return jsonResponse({
+            status: 'error',
+            error_code: 'MISSING_GEMINI_API_KEY',
+            message: 'GEMINI_API_KEY secret is not configured on Cloudflare Worker. Please run: wrangler secret put GEMINI_API_KEY',
+            test: testDetails,
+          }, 503, origin);
+        }
+
+        try {
+          const testEndpoint = getGeminiEndpoint(activeApiKey);
+          const testRes = await fetch(testEndpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': activeApiKey,
+            },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: 'Ping test' }] }],
+              generationConfig: { maxOutputTokens: 32 },
+            }),
+          });
+
+          const rawBody = await testRes.text();
+          const safeBody = sanitizeErrorMessage(rawBody, activeApiKey);
+
+          return jsonResponse({
+            status: testRes.ok ? 'ok' : 'google_error',
+            google_http_status: testRes.status,
+            google_ok: testRes.ok,
+            test: testDetails,
+            response_body: safeBody,
+          }, testRes.ok ? 200 : testRes.status, origin);
+        } catch (fetchErr) {
+          return jsonResponse({
+            status: 'fetch_exception',
+            test: testDetails,
+            error: fetchErr.message,
+          }, 503, origin);
+        }
+      }
 
       return jsonResponse({
         status: 'ok',
         service: 'MR.SALL AI Platform',
         version: '2.0.0',
-        configured: Boolean(env.GEMINI_API_KEY),
+        configured: Boolean(activeApiKey),
         gemini_model: GEMINI_CONFIG.model,
         image_configured: Boolean(env.STABILITY_API_KEY),
         limits: {
@@ -504,8 +610,13 @@ export default {
       }
 
       // Verify Gemini API key configuration
-      if (!env.GEMINI_API_KEY && path !== '/api/image') {
-        return errorResponse('AI service is not configured on the server. Please add GEMINI_API_KEY to Worker secrets.', 503, origin);
+      const activeApiKey = resolveGeminiApiKey(env, request);
+      if (!activeApiKey && path !== '/api/image') {
+        return jsonResponse({
+          error: true,
+          code: 'MISSING_GEMINI_API_KEY',
+          message: 'AI service is not configured on the server. Please add GEMINI_API_KEY to Worker secrets (wrangler secret put GEMINI_API_KEY) or configure it in Cloudflare Dashboard under Worker Settings > Variables and Secrets.',
+        }, 503, origin);
       }
 
       // Prepare response usage headers for successful requests
@@ -537,9 +648,18 @@ export default {
         return response;
       } catch (err) {
         console.error('Worker processing error:', err);
+        const msg = err.message || '';
+        let statusCode = 500;
+        if (msg.includes('HTTP 503') || msg.includes('overloaded')) statusCode = 503;
+        else if (msg.includes('HTTP 429') || msg.includes('rate limit')) statusCode = 429;
+        else if (msg.includes('HTTP 401') || msg.includes('Unauthorized')) statusCode = 401;
+        else if (msg.includes('HTTP 403') || msg.includes('Forbidden')) statusCode = 403;
+        else if (msg.includes('HTTP 404')) statusCode = 404;
+        else if (msg.includes('HTTP 400')) statusCode = 400;
+
         return errorResponse(
-          err.message || 'AI service temporarily unavailable. Please try again.',
-          500,
+          msg || 'AI service temporarily unavailable. Please try again.',
+          statusCode,
           origin,
           usageHeaders
         );
