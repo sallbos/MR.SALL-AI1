@@ -417,19 +417,21 @@ async function runWorkerSimulation() {
     const noKeyJson = await noKeyRes.json();
     assert(noKeyJson.code === 'MISSING_GEMINI_API_KEY', 'Error payload explicitly indicates MISSING_GEMINI_API_KEY');
 
-    // Test 11: Retry with Exponential Backoff on Transient 503 Error (2 fails, 3rd succeeds)
+    // Test 11: Retry with Exponential Backoff on Transient 503 Error
+    // With the HTTP 524 fix, maxRetries is now 1 (2 total attempts: 1 fail → 1 retry → success).
+    // Previously 3 attempts were allowed, but that caused 524 timeout chains when Gemini was slow.
     let callAttempts = 0;
     globalThis.fetch = async (url, options = {}) => {
       const urlStr = String(url);
       if (urlStr.includes(':generateContent')) {
         callAttempts++;
-        if (callAttempts < 3) {
-          // Simulate temporary Google 503 Service Unavailable
+        if (callAttempts < 2) {
+          // Simulate temporary Google 503 Service Unavailable (1 fail)
           return new Response('The model is overloaded.', { status: 503 });
         }
-        // 3rd attempt succeeds
+        // 2nd attempt succeeds
         return new Response(JSON.stringify({
-          candidates: [{ content: { parts: [{ text: 'Recovered after backoff retries!' }] } }]
+          candidates: [{ content: { parts: [{ text: 'Recovered after backoff retry!' }] } }]
         }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       }
       return originalFetch(url, options);
@@ -440,10 +442,34 @@ async function runWorkerSimulation() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: [{ role: 'user', content: 'retry test' }] })
     }), mockEnv);
-    assert(retryChatRes.status === 200, 'Chat recovers successfully after transient 503 failures via exponential backoff');
+    assert(retryChatRes.status === 200, 'Chat recovers successfully after transient 503 failure via exponential backoff');
     const retryChatJson = await retryChatRes.json();
-    assert(retryChatJson.content === 'Recovered after backoff retries!', 'Response text verified after backoff recovery');
-    assert(callAttempts === 3, 'Exactly 3 attempts executed before recovery');
+    assert(retryChatJson.content === 'Recovered after backoff retry!', 'Response text verified after backoff recovery');
+    assert(callAttempts === 2, 'Exactly 2 attempts executed before recovery (1 fail + 1 retry)');
+
+    // Test 12a: Timeout simulation — AbortError must NOT retry; return descriptive error
+    globalThis.fetch = async (url, options = {}) => {
+      const urlStr = String(url);
+      if (urlStr.includes(':generateContent')) {
+        // Simulate what happens when our 25s AbortController fires
+        const err = new Error('The user aborted a request.');
+        err.name = 'AbortError';
+        throw err;
+      }
+      return originalFetch(url, options);
+    };
+    const timeoutChatRes = await worker.fetch(new Request('https://mr-sall-ai1.workers.dev/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'timeout test' }] })
+    }), mockEnv);
+    assert([504, 500].includes(timeoutChatRes.status), 'Timeout returns HTTP 504 or 500 (not HTTP 524 from Cloudflare)');
+    const timeoutJson = await timeoutChatRes.json();
+    assert(
+      timeoutJson.message.toLowerCase().includes('timed out') || timeoutJson.message.toLowerCase().includes('timeout'),
+      'Timeout error message tells user to try a shorter message'
+    );
+    assert(!timeoutJson.message.includes('test_mock_key'), 'Timeout message does not expose API key');
 
     // Test 12: Clear HTTP Error Handling (401 Unauthorized simulation)
     globalThis.fetch = async (url) => {
