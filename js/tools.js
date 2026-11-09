@@ -241,13 +241,24 @@ const API = (() => {
   const DEFAULT_WORKER = 'https://mrsall-ai.your-subdomain.workers.dev';
 
   function getWorkerBase() {
-    return localStorage.getItem('mrsall_worker_url') || DEFAULT_WORKER;
+    const custom = localStorage.getItem('mrsall_worker_url');
+    if (custom && custom.trim().startsWith('http')) return custom.trim();
+    // In an integrated Cloudflare Worker deployment, the worker serves the frontend from same origin
+    if (typeof window !== 'undefined' && window.location && window.location.origin && window.location.protocol.startsWith('http')) {
+      if (window.location.hostname.includes('workers.dev') || !DEFAULT_WORKER.includes('your-subdomain')) {
+        return window.location.origin;
+      }
+    }
+    return DEFAULT_WORKER;
   }
 
   function isConfigured() {
     const custom = localStorage.getItem('mrsall_worker_url');
     if (custom && custom.trim().startsWith('http')) return true;
-    // Check if DEFAULT_WORKER has been customized from placeholder
+    // When served from Cloudflare Workers deployment, same-origin worker backend is available
+    if (typeof window !== 'undefined' && window.location && window.location.hostname) {
+      if (window.location.hostname.includes('workers.dev')) return true;
+    }
     if (DEFAULT_WORKER && !DEFAULT_WORKER.includes('your-subdomain')) return true;
     return false;
   }

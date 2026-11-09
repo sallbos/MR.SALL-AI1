@@ -232,7 +232,7 @@ const AuthManager = (() => {
 
   function requireAuth(options = {}) {
     const currentPage = window.location.pathname.split('/').pop() || 'index.html';
-    if (currentPage === 'login.html') return;
+    if (currentPage === 'login.html' || currentPage === 'login') return;
 
     if (!isAuthenticated()) {
       const isSubfolder = window.location.pathname.includes('/tools/');

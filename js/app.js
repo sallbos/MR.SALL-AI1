@@ -17,7 +17,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // ── Authentication Gatekeeper ──
   // Check if current page is protected and user is not authenticated
   const currentPage = window.location.pathname.split('/').pop() || 'index.html';
-  const isPublicPage = currentPage === 'login.html' || currentPage === 'privacy.html' || currentPage === 'terms.html' || currentPage === 'offline.html';
+  const isPublicPage = currentPage === 'login.html' || currentPage === 'login' ||
+                       currentPage === 'privacy.html' || currentPage === 'privacy' ||
+                       currentPage === 'terms.html' || currentPage === 'terms' ||
+                       currentPage === 'offline.html' || currentPage === 'offline';
 
   if (!isPublicPage && typeof AuthManager !== 'undefined' && !AuthManager.isAuthenticated()) {
     const isSubfolder = window.location.pathname.includes('/tools/');
