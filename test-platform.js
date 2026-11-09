@@ -337,26 +337,28 @@ async function runWorkerSimulation() {
   }), mockEnv);
   assert(optionsRes.status === 204, 'OPTIONS preflight returns 204 No Content with CORS headers');
 
-  // Test 8: Dynamic Gemini ListModels Discovery & Chat Execution Test
+  // Test 8: Gemini 3.8 Flash Chat Execution (English & Arabic)
   const originalFetch = globalThis.fetch;
   let requestedModelUrl = '';
+  let lastRequestBody = null;
+  let lastRequestHeaders = null;
+
   globalThis.fetch = async (url, options = {}) => {
     const urlStr = String(url);
-    if (urlStr.includes('/v1beta/models?')) {
-      return new Response(JSON.stringify({
-        models: [
-          { name: 'models/text-embedding-004', supportedGenerationMethods: ['embedContent'] },
-          { name: 'models/gemini-1.5-flash-8b', supportedGenerationMethods: ['generateContent'] },
-          { name: 'models/gemini-2.0-flash', supportedGenerationMethods: ['generateContent', 'countTokens'] }
-        ]
-      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    }
     if (urlStr.includes(':generateContent')) {
       requestedModelUrl = urlStr;
+      lastRequestBody = options.body ? JSON.parse(options.body) : null;
+      lastRequestHeaders = options.headers;
+
+      const userText = lastRequestBody?.contents?.[0]?.parts?.[0]?.text || '';
+      const replyText = userText.includes('صالح') || userText.includes('مرحبا')
+        ? 'مرحباً بك يا صالح! أنا MR.SALL AI، أعمل الآن بنجاح باستخدام نموذج gemini-3.8-flash.'
+        : 'Hello! I am MR.SALL AI, fully operational and powered by gemini-3.8-flash.';
+
       return new Response(JSON.stringify({
         candidates: [{
           content: {
-            parts: [{ text: 'Hello! I am MR.SALL AI, powered by the dynamically discovered Gemini model.' }]
+            parts: [{ text: replyText }]
           }
         }]
       }), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -365,23 +367,51 @@ async function runWorkerSimulation() {
   };
 
   try {
-    const chatSuccessRes = await worker.fetch(new Request('https://mr-sall-ai1.workers.dev/api/chat', {
+    // 8a: English Prompt
+    const chatEnRes = await worker.fetch(new Request('https://mr-sall-ai1.workers.dev/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        messages: [{ role: 'user', content: 'Say hello to Salih!' }]
+        messages: [{ role: 'user', content: 'Say hello to Salih in English!' }]
       })
     }), mockEnv);
 
-    assert(chatSuccessRes.status === 200, 'POST /api/chat returns 200 OK via dynamic model discovery');
-    const chatSuccessJson = await chatSuccessRes.json();
-    assert(chatSuccessJson.content.includes('Hello! I am MR.SALL AI'), 'Gemini response text successfully received from dynamically resolved model');
-    assert(requestedModelUrl.includes('gemini-2.0-flash:generateContent'), 'Auto-discovery correctly prioritized gemini-2.0-flash over 1.5-flash-8b and embedding models');
+    assert(chatEnRes.status === 200, 'POST /api/chat (English) returns 200 OK');
+    const chatEnJson = await chatEnRes.json();
+    assert(chatEnJson.content.includes('gemini-3.8-flash'), 'English response confirmed from gemini-3.8-flash');
+    assert(requestedModelUrl.includes('models/gemini-3.8-flash:generateContent'), 'Request URL correctly targets /models/gemini-3.8-flash:generateContent');
+    assert(lastRequestHeaders['x-goog-api-key'] === 'test_mock_key', 'Authentication header x-goog-api-key correctly passed');
 
-    // Test 9: Diagnostic Health Check returns resolved model
-    const healthDiagRes = await worker.fetch(new Request('https://mr-sall-ai1.workers.dev/api/health?diagnostic=true'), mockEnv);
-    const healthDiagJson = await healthDiagRes.json();
-    assert(healthDiagJson.gemini_model.includes('gemini-2.0-flash'), 'GET /api/health?diagnostic=true returns active discovered model name');
+    // 8b: Arabic Prompt
+    const chatArRes = await worker.fetch(new Request('https://mr-sall-ai1.workers.dev/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: 'مرحباً يا صالح' }]
+      })
+    }), mockEnv);
+
+    assert(chatArRes.status === 200, 'POST /api/chat (Arabic) returns 200 OK');
+    const chatArJson = await chatArRes.json();
+    assert(chatArJson.content.includes('صالح') && chatArJson.content.includes('gemini-3.8-flash'), 'Arabic response confirmed with proper formatting');
+
+    // Test 9: Health Check returns gemini-3.8-flash as the active model
+    const healthRes2 = await worker.fetch(new Request('https://mr-sall-ai1.workers.dev/api/health'), mockEnv);
+    const healthJson2 = await healthRes2.json();
+    assert(healthJson2.gemini_model === 'gemini-3.8-flash', 'GET /api/health accurately reports active model as "gemini-3.8-flash"');
+
+    // Test 10: Clear HTTP Error Handling (401 Unauthorized simulation)
+    globalThis.fetch = async (url) => {
+      return new Response('API key not valid', { status: 401 });
+    };
+    const chat401Res = await worker.fetch(new Request('https://mr-sall-ai1.workers.dev/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'test' }] })
+    }), mockEnv);
+    assert(chat401Res.status === 500, 'Handled 401 returns controlled error response');
+    const chat401Json = await chat401Res.json();
+    assert(chat401Json.message.includes('401') && !chat401Json.message.includes('test_mock_key'), '401 error message is descriptive and does not expose secrets');
 
   } finally {
     globalThis.fetch = originalFetch;
