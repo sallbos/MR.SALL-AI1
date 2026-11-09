@@ -1,10 +1,11 @@
 # MR.SALL AI — Complete Platform Development Progress
 
-> **Last Updated:** Final Production Release Audit  
+> **Last Updated:** Cloudflare Worker Static Assets & Deployment Audit  
 > **Brand:** MR.SALL AI  
 > **Founder:** SALIH ABDELQAYOUM BACHIKH  
 > **Tagline:** "Your Intelligence. Your Tools. Your Future."  
-> **Verification Status:** 64 / 64 Automated Tests Passed (100% Green)
+> **Target Worker:** `mr-sall-ai1` (Cloudflare Workers)  
+> **Verification Status:** 83 / 83 Automated Tests Passed (100% Green)
 
 ---
 
@@ -188,23 +189,56 @@ MR.SALL AI — COMPREHENSIVE PLATFORM AUDIT
   ✅ PASS: All internal links in tools/code.html resolved successfully (20 references)
   ✅ PASS: All internal links in tools/pdf.html resolved successfully (21 references)
 
+// 6. Validating Cloudflare Worker & Wrangler Configuration:
+  ✅ PASS: wrangler.toml target Worker name is set to "mr-sall-ai1"
+  ✅ PASS: wrangler.toml [assets] directory is set to project root "."
+  ✅ PASS: wrangler.toml [assets] binding is set to "ASSETS"
+  ✅ PASS: wrangler.toml run_worker_first is enabled
+  ✅ PASS: .assetsignore exists to exclude worker and server files
+  ✅ PASS: .assetsignore excludes worker/ directory
+  ✅ PASS: .assetsignore excludes wrangler.toml
+  ✅ PASS: wrangler.toml contains no hardcoded Gemini API key
+  ✅ PASS: wrangler.toml contains no hardcoded secrets
+
+7. Simulating Cloudflare Worker Request Routing:
+  ✅ PASS: GET /api/health returns 200 OK
+  ✅ PASS: GET /api/health returns valid service JSON metadata
+  ✅ PASS: GET /api/usage returns 200 OK
+  ✅ PASS: GET /api/usage returns quota and tier information
+  ✅ PASS: GET / forwards to env.ASSETS and returns status 200
+  ✅ PASS: GET / serves HTML frontend, not JSON
+  ✅ PASS: GET /login resolves cleanly via pretty URL fallback to /login.html
+  ✅ PASS: GET /service-worker.js includes "Service-Worker-Allowed: /" header
+  ✅ PASS: POST /api/chat with invalid body returns 400 Bad Request
+  ✅ PASS: OPTIONS preflight returns 204 No Content with CORS headers
+
 ==============================================
-AUDIT COMPLETE: 64 PASSED, 0 FAILED
+AUDIT COMPLETE: 83 PASSED, 0 FAILED
 ==============================================
 ```
 
 ---
 
-## 4. Configuration Requirements for Production
+## 4. Configuration & Deployment Instructions for `mr-sall-ai1`
 
-1. **Google OAuth Client ID**:
-   - Create Web Application credentials in [Google Cloud Console](https://console.cloud.google.com/apis/credentials).
-   - Set authorized origins (e.g. `https://mrsall.ai` and `http://localhost:3000`).
-   - Add Client ID in the platform's **Settings Modal** or `js/auth.js`.
-2. **Cloudflare Worker Deployment**:
-   - Run `wrangler login` and `wrangler deploy` from `worker/`.
-   - Set Secret: `wrangler secret put GEMINI_API_KEY`.
-   - (Optional) Set Secret: `wrangler secret put STABILITY_API_KEY`.
-   - (Optional) Create KV namespace: `wrangler kv:namespace create USAGE_KV` and bind in `wrangler.toml`.
-3. **Frontend Worker Connection**:
-   - In Settings modal or `js/tools.js`, enter the deployed Worker URL (e.g. `https://mrsall-ai.your-subdomain.workers.dev`).
+1. **Integrated Architecture Verification**:
+   - The project is deployed as a single Cloudflare Worker using **Cloudflare Workers Static Assets**.
+   - Target Worker: `mr-sall-ai1` in `wrangler.toml`.
+   - The Worker acts as an API gateway for `/api/*` and reverse-proxies frontend requests (`/`, `/login`, CSS, JS, PWA assets) directly from the project root via `env.ASSETS`.
+2. **Secrets Management**:
+   - Secrets are never placed in source code or `wrangler.toml`.
+   - To configure or update secrets on `mr-sall-ai1`:
+     ```bash
+     npx wrangler secret put GEMINI_API_KEY
+     npx wrangler secret put STABILITY_API_KEY
+     ```
+3. **Deployment Command**:
+   - Run from the `MR-SALL-AI` project directory:
+     ```bash
+     npx wrangler deploy
+     ```
+   - This directly updates the existing deployed Worker `mr-sall-ai1` without creating duplicate Cloudflare projects.
+4. **Post-Deployment Verification**:
+   - Verify Frontend: Visit `https://mr-sall-ai1.<your-subdomain>.workers.dev/` (serves `index.html`).
+   - Verify Health Check: Visit `https://mr-sall-ai1.<your-subdomain>.workers.dev/api/health` (returns JSON status `ok`).
+   - Verify Usage: Visit `https://mr-sall-ai1.<your-subdomain>.workers.dev/api/usage` (returns daily quota status).

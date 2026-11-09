@@ -1,7 +1,14 @@
-name = "mrsall-ai"
+name = "mr-sall-ai1"
 main = "worker/index.js"
 compatibility_date = "2024-01-01"
 compatibility_flags = ["nodejs_compat"]
+
+# Cloudflare Workers Static Assets Configuration
+# Serves the integrated frontend (HTML, CSS, JS, PWA assets) alongside the backend
+[assets]
+directory = "."
+binding = "ASSETS"
+run_worker_first = true
 
 [vars]
 # Configurable daily message limits enforced on the backend

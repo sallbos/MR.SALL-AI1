@@ -1,0 +1,12 @@
+# Cloudflare Workers Static Assets Ignore File
+# Excludes backend code, configuration, scripts and documentation from static asset uploads
+
+worker/
+node_modules/
+.git/
+.gitignore
+wrangler.toml
+server.js
+test-platform.js
+DEVELOPMENT_PROGRESS.md
+README.md

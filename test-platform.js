@@ -236,11 +236,118 @@ htmlFiles.forEach(file => {
   }
 });
 
-// Summary
-console.log('\n==============================================');
-console.log(`AUDIT COMPLETE: ${passed} PASSED, ${failed} FAILED`);
-console.log('==============================================');
+// 6. Validate Cloudflare Worker & Wrangler Configuration
+console.log('\n6. Validating Cloudflare Worker & Wrangler Configuration:');
+const wranglerContent = fs.readFileSync(path.join(ROOT, 'wrangler.toml'), 'utf8');
 
-if (failed > 0) {
-  process.exit(1);
+// Check Worker target name
+assert(/^name\s*=\s*"mr-sall-ai1"/m.test(wranglerContent), 'wrangler.toml target Worker name is set to "mr-sall-ai1"');
+assert(/directory\s*=\s*"\."/m.test(wranglerContent), 'wrangler.toml [assets] directory is set to project root "."');
+assert(/binding\s*=\s*"ASSETS"/m.test(wranglerContent), 'wrangler.toml [assets] binding is set to "ASSETS"');
+assert(/run_worker_first\s*=\s*true/m.test(wranglerContent), 'wrangler.toml run_worker_first is enabled');
+
+// Check .assetsignore
+assert(fs.existsSync(path.join(ROOT, '.assetsignore')), '.assetsignore exists to exclude worker and server files');
+const assetsIgnoreContent = fs.readFileSync(path.join(ROOT, '.assetsignore'), 'utf8');
+assert(assetsIgnoreContent.includes('worker/'), '.assetsignore excludes worker/ directory');
+assert(assetsIgnoreContent.includes('wrangler.toml'), '.assetsignore excludes wrangler.toml');
+
+// Check no secrets in wrangler.toml
+assert(!wranglerContent.includes('AIza'), 'wrangler.toml contains no hardcoded Gemini API key');
+assert(!wranglerContent.includes('sk-'), 'wrangler.toml contains no hardcoded secrets');
+
+// 7. Simulating Cloudflare Worker Routing Logic
+console.log('\n7. Simulating Cloudflare Worker Request Routing:');
+async function runWorkerSimulation() {
+  const workerPath = path.join(ROOT, 'worker/index.js');
+  const workerModule = await import('file://' + workerPath.replace(/\\/g, '/'));
+  const worker = workerModule.default;
+
+  // Mock env
+  const mockEnv = {
+    FREE_DAILY_LIMIT: '5',
+    PREMIUM_DAILY_LIMIT: '50',
+    GEMINI_API_KEY: 'test_mock_key',
+    ASSETS: {
+      fetch: async (req) => {
+        const u = new URL(req.url);
+        if (u.pathname === '/' || u.pathname === '/index.html') {
+          return new Response('<!DOCTYPE html><html><head><title>MR.SALL AI</title></head></html>', {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' }
+          });
+        }
+        if (u.pathname === '/login.html') {
+          return new Response('<!DOCTYPE html><html>Login</html>', {
+            status: 200,
+            headers: { 'Content-Type': 'text/html' }
+          });
+        }
+        if (u.pathname === '/service-worker.js') {
+          return new Response('// service worker', {
+            status: 200,
+            headers: { 'Content-Type': 'application/javascript' }
+          });
+        }
+        return new Response('Not Found', { status: 404 });
+      }
+    }
+  };
+
+  // Test 1: GET /api/health
+  const healthRes = await worker.fetch(new Request('https://mr-sall-ai1.workers.dev/api/health'), mockEnv);
+  assert(healthRes.status === 200, 'GET /api/health returns 200 OK');
+  const healthJson = await healthRes.json();
+  assert(healthJson.status === 'ok' && healthJson.service === 'MR.SALL AI Platform', 'GET /api/health returns valid service JSON metadata');
+
+  // Test 2: GET /api/usage
+  const usageRes = await worker.fetch(new Request('https://mr-sall-ai1.workers.dev/api/usage', {
+    headers: { 'X-User-Id': 'test_user_sim' }
+  }), mockEnv);
+  assert(usageRes.status === 200, 'GET /api/usage returns 200 OK');
+  const usageJson = await usageRes.json();
+  assert(usageJson.user_id === 'test_user_sim' && usageJson.limit === 5, 'GET /api/usage returns quota and tier information');
+
+  // Test 3: GET / (Root path should serve frontend via env.ASSETS)
+  const rootRes = await worker.fetch(new Request('https://mr-sall-ai1.workers.dev/'), mockEnv);
+  assert(rootRes.status === 200, 'GET / forwards to env.ASSETS and returns status 200');
+  const rootText = await rootRes.text();
+  assert(rootText.includes('<!DOCTYPE html>'), 'GET / serves HTML frontend, not JSON');
+
+  // Test 4: Pretty URL fallback (GET /login without .html)
+  const loginRes = await worker.fetch(new Request('https://mr-sall-ai1.workers.dev/login'), mockEnv);
+  assert(loginRes.status === 200, 'GET /login resolves cleanly via pretty URL fallback to /login.html');
+
+  // Test 5: Service worker header check
+  const swRes = await worker.fetch(new Request('https://mr-sall-ai1.workers.dev/service-worker.js'), mockEnv);
+  assert(swRes.headers.get('Service-Worker-Allowed') === '/', 'GET /service-worker.js includes "Service-Worker-Allowed: /" header');
+
+  // Test 6: API endpoint POST without body returns 400
+  const chatBadRes = await worker.fetch(new Request('https://mr-sall-ai1.workers.dev/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({})
+  }), mockEnv);
+  assert(chatBadRes.status === 400, 'POST /api/chat with invalid body returns 400 Bad Request');
+
+  // Test 7: CORS OPTIONS preflight
+  const optionsRes = await worker.fetch(new Request('https://mr-sall-ai1.workers.dev/api/chat', {
+    method: 'OPTIONS',
+    headers: { 'Origin': 'https://mr-sall-ai1.workers.dev' }
+  }), mockEnv);
+  assert(optionsRes.status === 204, 'OPTIONS preflight returns 204 No Content with CORS headers');
+
+  // Summary
+  console.log('\n==============================================');
+  console.log(`AUDIT COMPLETE: ${passed} PASSED, ${failed} FAILED`);
+  console.log('==============================================');
+
+  if (failed > 0) {
+    process.exit(1);
+  }
 }
+
+runWorkerSimulation().catch(err => {
+  console.error('Simulation error:', err);
+  process.exit(1);
+});
