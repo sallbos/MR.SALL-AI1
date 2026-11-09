@@ -144,10 +144,13 @@ function errorResponse(message, status = 400, origin, extraHeaders = {}) {
   return jsonResponse({ error: true, message }, status, origin, extraHeaders);
 }
 
-// ── Gemini Dynamic Model Cache & Auto-Discovery Engine ──
-let resolvedGeminiModel = null;
-let resolvedGeminiModelTime = 0;
-const MODEL_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour TTL
+// ── Active Google Gemini Configuration ──
+// Single active model configuration for MR.SALL AI Platform
+const GEMINI_CONFIG = {
+  model: 'gemini-3.8-flash',
+  apiVersion: 'v1beta',
+  maxOutputTokens: 2048,
+};
 
 /**
  * Sanitize error messages to guarantee no API keys or secrets are leaked
@@ -162,117 +165,19 @@ function sanitizeErrorMessage(errMsg, apiKey) {
 }
 
 /**
- * Score eligible models to pick the most optimal stable model for text chat.
- * Prioritizes latest stable flash variants (2.5, 2.0, etc.)
+ * Construct the official Google Gemini API endpoint for content generation
  */
-function scoreGeminiModel(m) {
-  const name = (m.name || '').toLowerCase();
-  let score = 0;
-
-  if (name.includes('gemini-2.5-flash')) score += 1000;
-  else if (name.includes('gemini-2.0-flash') && !name.includes('lite')) score += 900;
-  else if (name.includes('gemini-2.0-flash-lite')) score += 800;
-  else if (name.includes('gemini-1.5-flash-8b')) score += 750;
-  else if (name.includes('gemini-1.5-flash')) score += 700;
-  else if (name.includes('gemini-2.5-pro')) score += 650;
-  else if (name.includes('gemini-2.0-pro')) score += 600;
-  else if (name.includes('gemini-1.5-pro')) score += 550;
-  else if (name.includes('gemini-pro')) score += 400;
-  else if (name.includes('flash')) score += 300;
-  else if (name.includes('gemini')) score += 200;
-  else score += 10;
-
-  // Prefer non-preview and non-experimental releases
-  if (!name.includes('preview') && !name.includes('exp') && !name.includes('experimental')) {
-    score += 50;
-  }
-
-  return score;
-}
-
-/**
- * Calls official Gemini API ListModels endpoint (GET https://generativelanguage.googleapis.com/v1beta/models)
- * Inspects supportedGenerationMethods for 'generateContent'
- * Automatically selects a verified, active model available to this API key
- */
-async function getOrDiscoverGeminiModel(env, forceRefresh = false) {
-  const now = Date.now();
-  if (!forceRefresh && resolvedGeminiModel && (now - resolvedGeminiModelTime < MODEL_CACHE_TTL_MS)) {
-    return resolvedGeminiModel;
-  }
-
-  const apiKey = env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY is not configured in Cloudflare Worker Secrets.');
-  }
-
-  const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
-  const res = await fetch(listUrl, {
-    method: 'GET',
-    headers: { 'Accept': 'application/json' },
-  });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    const safeErr = sanitizeErrorMessage(errText, apiKey);
-    throw new Error(`Failed to list Gemini models (HTTP ${res.status}): ${safeErr}`);
-  }
-
-  const data = await res.json();
-  const models = Array.isArray(data?.models) ? data.models : [];
-
-  // Filter to models that support generateContent and are suitable for chat/text tools
-  const eligible = models.filter(m => {
-    const methods = Array.isArray(m?.supportedGenerationMethods) ? m.supportedGenerationMethods : [];
-    if (!methods.includes('generateContent')) return false;
-
-    const name = (m?.name || '').toLowerCase();
-    // Exclude embeddings, imagen (image generation), and aqa
-    if (name.includes('embedding') || name.includes('imagen') || name.includes('aqa')) {
-      return false;
-    }
-    return true;
-  });
-
-  if (eligible.length === 0) {
-    throw new Error("No Gemini models supporting 'generateContent' are available for this API key.");
-  }
-
-  // Check if an explicit active configuration was passed in env, but only use it if it's in the eligible list
-  if (env.GEMINI_MODEL) {
-    const configuredTarget = env.GEMINI_MODEL.trim().toLowerCase();
-    const matched = eligible.find(m => {
-      const mn = (m.name || '').toLowerCase();
-      return mn === configuredTarget || mn === `models/${configuredTarget}`;
-    });
-    if (matched) {
-      resolvedGeminiModel = matched.name;
-      resolvedGeminiModelTime = now;
-      return resolvedGeminiModel;
-    }
-  }
-
-  // Automatically select the highest scored eligible model
-  eligible.sort((a, b) => scoreGeminiModel(b) - scoreGeminiModel(a));
-  const chosen = eligible[0];
-
-  resolvedGeminiModel = chosen.name;
-  resolvedGeminiModelTime = now;
-  return resolvedGeminiModel;
+function getGeminiEndpoint(apiKey) {
+  return `https://generativelanguage.googleapis.com/${GEMINI_CONFIG.apiVersion}/models/${GEMINI_CONFIG.model}:generateContent?key=${apiKey}`;
 }
 
 // ── Gemini API Call ──
 async function callGemini(env, promptOrContents, systemInstruction = '') {
-  let modelName;
-  try {
-    modelName = await getOrDiscoverGeminiModel(env);
-  } catch (discoveryErr) {
-    throw new Error(`Gemini model discovery error: ${discoveryErr.message}`);
+  if (!env.GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY is not configured in Cloudflare Worker Secrets.');
   }
 
-  // Build exact resource name (e.g. models/gemini-2.0-flash)
-  const resource = modelName.startsWith('models/') ? modelName : `models/${modelName}`;
-  const url = `https://generativelanguage.googleapis.com/v1beta/${resource}:generateContent?key=${env.GEMINI_API_KEY}`;
+  const endpointUrl = getGeminiEndpoint(env.GEMINI_API_KEY);
 
   let contents;
   if (Array.isArray(promptOrContents)) {
@@ -284,8 +189,7 @@ async function callGemini(env, promptOrContents, systemInstruction = '') {
   const body = {
     contents,
     generationConfig: {
-      maxOutputTokens: 2048,
-      temperature: 0.7,
+      maxOutputTokens: GEMINI_CONFIG.maxOutputTokens,
     },
   };
 
@@ -293,38 +197,46 @@ async function callGemini(env, promptOrContents, systemInstruction = '') {
     body.systemInstruction = { parts: [{ text: systemInstruction }] };
   }
 
-  let res = await fetch(url, {
+  const res = await fetch(endpointUrl, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': env.GEMINI_API_KEY,
+    },
     body: JSON.stringify(body),
   });
-
-  // If 404 NOT_FOUND is returned, the cached model may have been retired or altered:
-  // Revalidate by forcing ListModels rediscovery and retry once
-  if (res.status === 404) {
-    console.warn(`Model ${modelName} returned 404. Forcing rediscovery...`);
-    try {
-      const refreshedModel = await getOrDiscoverGeminiModel(env, true);
-      const newResource = refreshedModel.startsWith('models/') ? refreshedModel : `models/${refreshedModel}`;
-      const newUrl = `https://generativelanguage.googleapis.com/v1beta/${newResource}:generateContent?key=${env.GEMINI_API_KEY}`;
-      res = await fetch(newUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-    } catch (revalErr) {
-      console.error('Failed during model revalidation:', revalErr);
-    }
-  }
 
   if (!res.ok) {
     const rawErr = await res.text();
     const safeErr = sanitizeErrorMessage(rawErr, env.GEMINI_API_KEY);
-    throw new Error(`Gemini API error (HTTP ${res.status}): ${safeErr}`);
+
+    let userMessage = `Gemini API error (HTTP ${res.status}): ${safeErr}`;
+    if (res.status === 400) {
+      userMessage = `Gemini API request was invalid (HTTP 400): ${safeErr}`;
+    } else if (res.status === 401) {
+      userMessage = 'Unauthorized (HTTP 401): Invalid GEMINI_API_KEY. Please verify your Cloudflare Worker secret.';
+    } else if (res.status === 403) {
+      userMessage = `Forbidden (HTTP 403): Your GEMINI_API_KEY lacks permissions or region access for ${GEMINI_CONFIG.model}.`;
+    } else if (res.status === 404) {
+      userMessage = `Model not found (HTTP 404): Endpoint for '${GEMINI_CONFIG.model}' was not found for API version ${GEMINI_CONFIG.apiVersion}.`;
+    } else if (res.status === 429) {
+      userMessage = 'Google Gemini rate limit exceeded (HTTP 429). Please wait a moment and try again.';
+    } else if (res.status >= 500) {
+      userMessage = `Google Gemini service temporarily unavailable (HTTP ${res.status}). Service is experiencing downtime.`;
+    }
+    throw new Error(userMessage);
   }
 
   const data = await res.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  const parts = data?.candidates?.[0]?.content?.parts || [];
+  const textParts = parts
+    .filter(p => p && typeof p.text === 'string' && !p.thought)
+    .map(p => p.text);
+
+  const text = textParts.length > 0
+    ? textParts.join('\n')
+    : parts.map(p => p.text || '').filter(Boolean).join('\n');
+
   if (!text) {
     const blockReason = data?.promptFeedback?.blockReason || data?.candidates?.[0]?.finishReason;
     if (blockReason) {
@@ -513,24 +425,12 @@ export default {
       const freeLimit = parseInt(env.FREE_DAILY_LIMIT || '50', 10);
       const premiumLimit = parseInt(env.PREMIUM_DAILY_LIMIT || '500', 10);
 
-      let activeModel = resolvedGeminiModel || 'dynamic-discovery';
-      let diagnosticResult = null;
-      if (url.searchParams.get('diagnostic') === 'true' && env.GEMINI_API_KEY) {
-        try {
-          activeModel = await getOrDiscoverGeminiModel(env);
-          diagnosticResult = 'Model discovery successful';
-        } catch (diagErr) {
-          diagnosticResult = diagErr.message;
-        }
-      }
-
       return jsonResponse({
         status: 'ok',
         service: 'MR.SALL AI Platform',
         version: '2.0.0',
         configured: Boolean(env.GEMINI_API_KEY),
-        gemini_model: activeModel,
-        ...(diagnosticResult ? { diagnostic: diagnosticResult } : {}),
+        gemini_model: GEMINI_CONFIG.model,
         image_configured: Boolean(env.STABILITY_API_KEY),
         limits: {
           free_daily_limit: freeLimit,
