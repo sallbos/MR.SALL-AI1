@@ -337,6 +337,56 @@ async function runWorkerSimulation() {
   }), mockEnv);
   assert(optionsRes.status === 204, 'OPTIONS preflight returns 204 No Content with CORS headers');
 
+  // Test 8: Dynamic Gemini ListModels Discovery & Chat Execution Test
+  const originalFetch = globalThis.fetch;
+  let requestedModelUrl = '';
+  globalThis.fetch = async (url, options = {}) => {
+    const urlStr = String(url);
+    if (urlStr.includes('/v1beta/models?')) {
+      return new Response(JSON.stringify({
+        models: [
+          { name: 'models/text-embedding-004', supportedGenerationMethods: ['embedContent'] },
+          { name: 'models/gemini-1.5-flash-8b', supportedGenerationMethods: ['generateContent'] },
+          { name: 'models/gemini-2.0-flash', supportedGenerationMethods: ['generateContent', 'countTokens'] }
+        ]
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    if (urlStr.includes(':generateContent')) {
+      requestedModelUrl = urlStr;
+      return new Response(JSON.stringify({
+        candidates: [{
+          content: {
+            parts: [{ text: 'Hello! I am MR.SALL AI, powered by the dynamically discovered Gemini model.' }]
+          }
+        }]
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    return originalFetch(url, options);
+  };
+
+  try {
+    const chatSuccessRes = await worker.fetch(new Request('https://mr-sall-ai1.workers.dev/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: [{ role: 'user', content: 'Say hello to Salih!' }]
+      })
+    }), mockEnv);
+
+    assert(chatSuccessRes.status === 200, 'POST /api/chat returns 200 OK via dynamic model discovery');
+    const chatSuccessJson = await chatSuccessRes.json();
+    assert(chatSuccessJson.content.includes('Hello! I am MR.SALL AI'), 'Gemini response text successfully received from dynamically resolved model');
+    assert(requestedModelUrl.includes('gemini-2.0-flash:generateContent'), 'Auto-discovery correctly prioritized gemini-2.0-flash over 1.5-flash-8b and embedding models');
+
+    // Test 9: Diagnostic Health Check returns resolved model
+    const healthDiagRes = await worker.fetch(new Request('https://mr-sall-ai1.workers.dev/api/health?diagnostic=true'), mockEnv);
+    const healthDiagJson = await healthDiagRes.json();
+    assert(healthDiagJson.gemini_model.includes('gemini-2.0-flash'), 'GET /api/health?diagnostic=true returns active discovered model name');
+
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
   // Summary
   console.log('\n==============================================');
   console.log(`AUDIT COMPLETE: ${passed} PASSED, ${failed} FAILED`);
