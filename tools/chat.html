@@ -1,1 +1,124 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#080B18">
+  <title>AI Chat — MR.SALL AI</title>
+  <!-- Favicon & PWA Icons -->
+  <link rel="icon" type="image/png" href="../assets/favicon.png">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="apple-touch-icon" href="../assets/icons/pwa/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MR.SALL AI">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="application-name" content="MR.SALL AI">
+  <meta name="msapplication-TileColor" content="#080B18">
+  <meta name="msapplication-TileImage" content="../assets/icons/pwa/icon-144x144.png">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
 
+<nav class="navbar" id="navbar">
+  <div class="container">
+    <div class="nav-inner">
+      <a href="../index.html" class="nav-logo">
+        <img src="../assets/logo.png" alt="MR.SALL AI Logo" class="nav-logo-img">
+        <div class="nav-logo-text"><span>MR.SALL </span><span class="ai-badge">AI</span></div>
+      </a>
+      <ul class="nav-links">
+        <li><a href="../index.html" data-i18n="nav_home">Home</a></li>
+        <li><a href="../index.html#tools" data-i18n="nav_tools">AI Tools</a></li>
+        <li><a href="../founder.html" data-i18n="nav_founder">About Founder</a></li>
+        <li><a href="#settings" data-action="settings" data-i18n="nav_settings">Settings</a></li>
+      </ul>
+      <div class="nav-actions">
+        <div class="nav-usage-badge" id="nav-usage-badge" title="Daily message quota" data-action="settings">
+          ⚡ <span class="usage-remaining">50</span> left
+        </div>
+        <button type="button" class="btn-pwa-install" aria-label="Install App">
+          <span>⚡</span> <span data-i18n="install_btn">Install App</span>
+        </button>
+        <select class="lang-select">
+          <option value="en">🌐 EN</option>
+          <option value="ar">🌐 AR</option>
+          <option value="fr">🌐 FR</option>
+        </select>
+        <button class="theme-toggle" aria-label="Toggle theme">☀️</button>
+        <button class="menu-toggle" aria-label="Menu">☰</button>
+        <a href="../index.html" class="btn btn-secondary btn-sm" data-i18n="back_home">← Home</a>
+      </div>
+    </div>
+  </div>
+</nav>
+<div class="mobile-nav">
+  <a href="../index.html" data-i18n="nav_home">Home</a>
+  <a href="../index.html#tools" data-i18n="nav_tools">AI Tools</a>
+  <a href="../founder.html" data-i18n="nav_founder">About Founder</a>
+  <select class="lang-select" style="margin-top:8px;">
+    <option value="en">🌐 English</option>
+    <option value="ar">🌐 العربية</option>
+    <option value="fr">🌐 Français</option>
+  </select>
+</div>
+
+<main class="tool-page">
+  <!-- Tool Header -->
+  <div class="tool-header">
+    <div class="container">
+      <div class="tool-header-inner">
+        <div class="tool-header-icon">💬</div>
+        <div class="tool-header-info">
+          <h1 data-i18n="chat_title">AI Chat</h1>
+          <p data-i18n="chat_desc">Have intelligent conversations with your AI assistant</p>
+        </div>
+        <div style="margin-inline-start:auto;">
+          <button class="btn btn-secondary btn-sm" id="new-chat-btn" data-i18n="new_chat">New Chat</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tool Body -->
+  <div class="tool-body" id="chat-tool-body">
+    <div class="container">
+      <div class="chat-layout">
+        <!-- Sidebar -->
+        <div class="chat-sidebar">
+          <div class="chat-history-title" data-i18n="chat_history">Chat History</div>
+          <div id="chat-history-list"></div>
+        </div>
+
+        <!-- Chat Main -->
+        <div class="chat-main">
+          <div class="chat-messages" id="chat-messages"></div>
+          <div class="chat-input-area">
+            <div class="chat-input-wrapper">
+              <textarea
+                class="chat-textarea"
+                id="chat-input"
+                rows="1"
+                data-i18n-placeholder="type_msg"
+                placeholder="Type your message..."
+              ></textarea>
+              <button class="chat-send-btn" id="chat-send" aria-label="Send">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+              </button>
+            </div>
+            <p style="font-size:11px;color:var(--text-muted);margin-top:8px;text-align:center;">Press Enter to send, Shift+Enter for new line.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="../js/theme.js"></script>
+<script src="../js/language.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/pwa.js"></script>
+<script src="../js/tools.js"></script>
+<script src="../js/app.js"></script>
+</body>
+</html>

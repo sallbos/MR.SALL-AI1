@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#080B18">
+  <title>AI Translator — MR.SALL AI</title>
+  <!-- Favicon & PWA Icons -->
+  <link rel="icon" type="image/png" href="../assets/favicon.png">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="apple-touch-icon" href="../assets/icons/pwa/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MR.SALL AI">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="application-name" content="MR.SALL AI">
+  <meta name="msapplication-TileColor" content="#080B18">
+  <meta name="msapplication-TileImage" content="../assets/icons/pwa/icon-144x144.png">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<nav class="navbar" id="navbar">
+  <div class="container">
+    <div class="nav-inner">
+      <a href="../index.html" class="nav-logo">
+        <img src="../assets/logo.png" alt="MR.SALL AI Logo" class="nav-logo-img">
+        <div class="nav-logo-text"><span>MR.SALL </span><span class="ai-badge">AI</span></div>
+      </a>
+      <ul class="nav-links">
+        <li><a href="../index.html" data-i18n="nav_home">Home</a></li>
+        <li><a href="../index.html#tools" data-i18n="nav_tools">AI Tools</a></li>
+        <li><a href="../founder.html" data-i18n="nav_founder">About Founder</a></li>
+        <li><a href="#settings" data-action="settings" data-i18n="nav_settings">Settings</a></li>
+      </ul>
+      <div class="nav-actions">
+        <div class="nav-usage-badge" id="nav-usage-badge" title="Daily message quota" data-action="settings">
+          ⚡ <span class="usage-remaining">50</span> left
+        </div>
+        <button type="button" class="btn-pwa-install" aria-label="Install App">
+          <span>⚡</span> <span data-i18n="install_btn">Install App</span>
+        </button>
+        <select class="lang-select">
+          <option value="en">🌐 EN</option>
+          <option value="ar">🌐 AR</option>
+          <option value="fr">🌐 FR</option>
+        </select>
+        <button class="theme-toggle" aria-label="Toggle theme">☀️</button>
+        <button class="menu-toggle" aria-label="Menu">☰</button>
+        <a href="../index.html" class="btn btn-secondary btn-sm" data-i18n="back_home">← Home</a>
+      </div>
+    </div>
+  </div>
+</nav>
+<div class="mobile-nav">
+  <a href="../index.html" data-i18n="nav_home">Home</a>
+  <a href="../index.html#tools" data-i18n="nav_tools">AI Tools</a>
+  <a href="../founder.html" data-i18n="nav_founder">About Founder</a>
+  <select class="lang-select" style="margin-top:8px;">
+    <option value="en">🌐 English</option>
+    <option value="ar">🌐 العربية</option>
+    <option value="fr">🌐 Français</option>
+  </select>
+</div>
+
+<main class="tool-page">
+  <div class="tool-header">
+    <div class="container">
+      <div class="tool-header-inner">
+        <div class="tool-header-icon">🌐</div>
+        <div class="tool-header-info">
+          <h1 data-i18n="translator_title">AI Translator</h1>
+          <p data-i18n="translator_desc">Translate between Arabic, English, and French</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tool-body" id="translator-tool-body">
+    <div class="container">
+      <!-- Language Selectors -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <label class="form-label" data-i18n="translator_from">From</label>
+          <select class="form-select" id="trans-from" style="width:160px;">
+            <option value="auto" data-i18n="translator_auto">Auto Detect</option>
+            <option value="ar">العربية</option>
+            <option value="en">English</option>
+            <option value="fr">Français</option>
+          </select>
+        </div>
+        <button class="swap-btn" id="trans-swap" title="Swap languages">⇄</button>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <label class="form-label" data-i18n="translator_to">To</label>
+          <select class="form-select" id="trans-to" style="width:160px;">
+            <option value="en">English</option>
+            <option value="ar">العربية</option>
+            <option value="fr">Français</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Translator Panels -->
+      <div class="translator-layout">
+        <!-- Input -->
+        <div class="translator-panel">
+          <div class="translator-panel-header">
+            <span style="font-size:13px;font-weight:600;color:var(--text-secondary);">Source</span>
+            <button class="btn btn-ghost btn-sm" id="trans-clear-btn" data-i18n="clear">Clear</button>
+          </div>
+          <textarea
+            class="translator-textarea"
+            id="trans-input"
+            data-i18n-placeholder="translator_input_ph"
+            placeholder="Enter text to translate..."
+          ></textarea>
+        </div>
+
+        <div class="translator-action-wrap">
+          <button class="btn btn-primary" id="trans-btn" data-i18n="translate">Translate</button>
+        </div>
+
+        <!-- Output -->
+        <div class="translator-panel">
+          <div class="translator-panel-header">
+            <span style="font-size:13px;font-weight:600;color:var(--text-secondary);">Translation</span>
+            <button class="btn btn-ghost btn-sm" id="trans-copy-btn" data-i18n="copy">📋 Copy</button>
+          </div>
+          <textarea
+            class="translator-textarea"
+            id="trans-output"
+            data-i18n-placeholder="translator_output_ph"
+            placeholder="Translation will appear here..."
+            readonly
+          ></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="../js/theme.js"></script>
+<script src="../js/language.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/pwa.js"></script>
+<script src="../js/tools.js"></script>
+<script src="../js/app.js"></script>
+</body>
+</html>

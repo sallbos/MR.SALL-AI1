@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#080B18">
+  <title>PDF Assistant — MR.SALL AI</title>
+  <!-- Favicon & PWA Icons -->
+  <link rel="icon" type="image/png" href="../assets/favicon.png">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="apple-touch-icon" href="../assets/icons/pwa/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MR.SALL AI">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="application-name" content="MR.SALL AI">
+  <meta name="msapplication-TileColor" content="#080B18">
+  <meta name="msapplication-TileImage" content="../assets/icons/pwa/icon-144x144.png">
+  <link rel="stylesheet" href="../css/style.css">
+  <!-- PDF.js for client-side text extraction -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" crossorigin="anonymous"></script>
+  <script>
+    if (typeof pdfjsLib !== 'undefined') {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+  </script>
+</head>
+<body>
+
+<nav class="navbar" id="navbar">
+  <div class="container">
+    <div class="nav-inner">
+      <a href="../index.html" class="nav-logo">
+        <img src="../assets/logo.png" alt="MR.SALL AI Logo" class="nav-logo-img">
+        <div class="nav-logo-text"><span>MR.SALL </span><span class="ai-badge">AI</span></div>
+      </a>
+      <ul class="nav-links">
+        <li><a href="../index.html" data-i18n="nav_home">Home</a></li>
+        <li><a href="../index.html#tools" data-i18n="nav_tools">AI Tools</a></li>
+        <li><a href="../founder.html" data-i18n="nav_founder">About Founder</a></li>
+        <li><a href="#settings" data-action="settings" data-i18n="nav_settings">Settings</a></li>
+      </ul>
+      <div class="nav-actions">
+        <div class="nav-usage-badge" id="nav-usage-badge" title="Daily message quota" data-action="settings">
+          ⚡ <span class="usage-remaining">50</span> left
+        </div>
+        <button type="button" class="btn-pwa-install" aria-label="Install App">
+          <span>⚡</span> <span data-i18n="install_btn">Install App</span>
+        </button>
+        <select class="lang-select">
+          <option value="en">🌐 EN</option>
+          <option value="ar">🌐 AR</option>
+          <option value="fr">🌐 FR</option>
+        </select>
+        <button class="theme-toggle" aria-label="Toggle theme">☀️</button>
+        <button class="menu-toggle" aria-label="Menu">☰</button>
+        <a href="../index.html" class="btn btn-secondary btn-sm" data-i18n="back_home">← Home</a>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<div class="mobile-nav">
+  <a href="../index.html" data-i18n="nav_home">Home</a>
+  <a href="../index.html#tools" data-i18n="nav_tools">AI Tools</a>
+  <a href="../founder.html" data-i18n="nav_founder">About Founder</a>
+  <select class="lang-select" style="margin-top:8px;">
+    <option value="en">🌐 English</option>
+    <option value="ar">🌐 العربية</option>
+    <option value="fr">🌐 Français</option>
+  </select>
+</div>
+
+<main class="tool-page">
+  <div class="tool-header">
+    <div class="container">
+      <div class="tool-header-inner">
+        <div class="tool-header-icon">📄</div>
+        <div class="tool-header-info">
+          <h1 data-i18n="pdf_title">PDF Assistant</h1>
+          <p data-i18n="pdf_desc">Upload a PDF and get AI-powered answers</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tool-body" id="pdf-tool-body">
+    <div class="container">
+      <div class="tool-split-layout">
+        <!-- Left: Upload + Q&A -->
+        <div style="display:flex;flex-direction:column;gap:20px;">
+          <!-- Upload Area -->
+          <div class="upload-area" id="pdf-upload-area">
+            <input type="file" id="pdf-file-input" accept=".pdf" style="display:none;">
+            <div class="upload-icon">📄</div>
+            <div class="upload-title" data-i18n="pdf_upload_title">Upload your PDF</div>
+            <p class="upload-desc" data-i18n="pdf_upload_desc">Drag and drop or click to browse. Max 10 MB.</p>
+          </div>
+
+          <!-- File Info (hidden until upload) -->
+          <div id="pdf-info" style="display:none;background:var(--bg-card);border:1px solid var(--border-color);border-radius:12px;padding:16px;gap:12px;align-items:center;">
+            <div style="font-size:32px;">📄</div>
+            <div style="flex:1;overflow:hidden;">
+              <div id="pdf-filename" style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+              <div id="pdf-fileinfo" style="font-size:12px;color:var(--text-muted);margin-top:2px;"></div>
+            </div>
+            <button class="btn btn-ghost btn-sm" id="pdf-new-btn" style="margin-left:auto;" data-i18n="upload">New PDF</button>
+          </div>
+
+          <!-- Q&A (hidden until upload) -->
+          <div id="pdf-actions" style="display:none;flex-direction:column;gap:12px;">
+            <div class="form-group">
+              <label class="form-label" data-i18n="pdf_question_ph">Ask a Question</label>
+              <textarea
+                class="form-textarea"
+                id="pdf-question"
+                data-i18n-placeholder="pdf_question_ph"
+                placeholder="Ask a question about your document..."
+                style="min-height:120px;"
+              ></textarea>
+            </div>
+            <div style="display:flex;gap:12px;">
+              <button class="btn btn-primary w-full" id="pdf-ask-btn" data-i18n="pdf_ask">Ask Question</button>
+              <button class="btn btn-secondary" id="pdf-summarize-btn" data-i18n="pdf_summarize">Summarize</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Output -->
+        <div>
+          <div class="output-panel" id="pdf-output" style="display:none;">
+            <div class="output-header">
+              <span class="output-title">Answer / Summary</span>
+              <button class="btn btn-ghost btn-sm" id="pdf-copy-btn" data-i18n="copy">📋 Copy</button>
+            </div>
+            <div class="output-body" id="pdf-output-text"></div>
+          </div>
+
+          <!-- Placeholder when no output -->
+          <div id="pdf-output-placeholder" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);text-align:center;background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:60px 24px;min-height:300px;">
+            <div>
+              <div style="font-size:48px;margin-bottom:12px;">🤖</div>
+              <p>Upload a PDF to get started.</p>
+              <p style="font-size:0.875rem;margin-top:4px;">Ask questions or generate comprehensive summaries.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="../js/theme.js"></script>
+<script src="../js/language.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/pwa.js"></script>
+<script src="../js/tools.js"></script>
+<script src="../js/app.js"></script>
+</body>
+</html>

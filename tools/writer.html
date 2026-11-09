@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#080B18">
+  <title>AI Writer — MR.SALL AI</title>
+  <!-- Favicon & PWA Icons -->
+  <link rel="icon" type="image/png" href="../assets/favicon.png">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="apple-touch-icon" href="../assets/icons/pwa/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MR.SALL AI">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="application-name" content="MR.SALL AI">
+  <meta name="msapplication-TileColor" content="#080B18">
+  <meta name="msapplication-TileImage" content="../assets/icons/pwa/icon-144x144.png">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<nav class="navbar" id="navbar">
+  <div class="container">
+    <div class="nav-inner">
+      <a href="../index.html" class="nav-logo">
+        <img src="../assets/logo.png" alt="MR.SALL AI Logo" class="nav-logo-img">
+        <div class="nav-logo-text"><span>MR.SALL </span><span class="ai-badge">AI</span></div>
+      </a>
+      <ul class="nav-links">
+        <li><a href="../index.html" data-i18n="nav_home">Home</a></li>
+        <li><a href="../index.html#tools" data-i18n="nav_tools">AI Tools</a></li>
+        <li><a href="../founder.html" data-i18n="nav_founder">About Founder</a></li>
+        <li><a href="#settings" data-action="settings" data-i18n="nav_settings">Settings</a></li>
+      </ul>
+      <div class="nav-actions">
+        <div class="nav-usage-badge" id="nav-usage-badge" title="Daily message quota" data-action="settings">
+          ⚡ <span class="usage-remaining">50</span> left
+        </div>
+        <button type="button" class="btn-pwa-install" aria-label="Install App">
+          <span>⚡</span> <span data-i18n="install_btn">Install App</span>
+        </button>
+        <select class="lang-select">
+          <option value="en">🌐 EN</option>
+          <option value="ar">🌐 AR</option>
+          <option value="fr">🌐 FR</option>
+        </select>
+        <button class="theme-toggle" aria-label="Toggle theme">☀️</button>
+        <button class="menu-toggle" aria-label="Menu">☰</button>
+        <a href="../index.html" class="btn btn-secondary btn-sm" data-i18n="back_home">← Home</a>
+      </div>
+    </div>
+  </div>
+</nav>
+<div class="mobile-nav">
+  <a href="../index.html" data-i18n="nav_home">Home</a>
+  <a href="../index.html#tools" data-i18n="nav_tools">AI Tools</a>
+  <a href="../founder.html" data-i18n="nav_founder">About Founder</a>
+  <select class="lang-select" style="margin-top:8px;">
+    <option value="en">🌐 English</option>
+    <option value="ar">🌐 العربية</option>
+    <option value="fr">🌐 Français</option>
+  </select>
+</div>
+
+<main class="tool-page">
+  <div class="tool-header">
+    <div class="container">
+      <div class="tool-header-inner">
+        <div class="tool-header-icon">✍️</div>
+        <div class="tool-header-info">
+          <h1 data-i18n="writer_title">AI Writer</h1>
+          <p data-i18n="writer_desc">Generate professional content in seconds</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tool-body" id="writer-tool-body">
+    <div class="container">
+      <div class="tool-split-layout">
+        <!-- Left: Controls -->
+        <div style="display:flex;flex-direction:column;gap:20px;">
+          <div class="form-group">
+            <label class="form-label" data-i18n="writer_type">Content Type</label>
+            <select class="form-select" id="writer-type">
+              <option value="article" data-i18n="writer_type_article">Article</option>
+              <option value="email" data-i18n="writer_type_email">Email</option>
+              <option value="rewrite" data-i18n="writer_type_rewrite">Rewrite</option>
+              <option value="summary" data-i18n="writer_type_summary">Summary</option>
+              <option value="improve" data-i18n="writer_type_improve">Improve</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" data-i18n="writer_tone">Tone</label>
+            <select class="form-select" id="writer-tone">
+              <option value="professional" data-i18n="writer_tone_professional">Professional</option>
+              <option value="casual" data-i18n="writer_tone_casual">Casual</option>
+              <option value="formal" data-i18n="writer_tone_formal">Formal</option>
+              <option value="creative" data-i18n="writer_tone_creative">Creative</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label class="form-label" data-i18n="writer_topic">Topic / Content</label>
+            <textarea
+              class="form-textarea"
+              id="writer-topic"
+              data-i18n-placeholder="writer_topic_ph"
+              placeholder="Enter your topic, text, or instructions..."
+              style="min-height:200px;"
+            ></textarea>
+          </div>
+          <div style="display:flex;gap:12px;">
+            <button class="btn btn-primary w-full" id="writer-generate-btn" data-i18n="generate">Generate</button>
+            <button class="btn btn-secondary" id="writer-clear-btn" data-i18n="clear">Clear</button>
+          </div>
+        </div>
+
+        <!-- Right: Output -->
+        <div class="output-panel">
+          <div class="output-header">
+            <span class="output-title">Output</span>
+            <button class="btn btn-ghost btn-sm" id="writer-copy-btn" data-i18n="copy">📋 Copy</button>
+          </div>
+          <div class="output-body" id="writer-output">
+            <div class="output-placeholder" data-i18n="generating">Your generated content will appear here...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="../js/theme.js"></script>
+<script src="../js/language.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/pwa.js"></script>
+<script src="../js/tools.js"></script>
+<script src="../js/app.js"></script>
+</body>
+</html>
