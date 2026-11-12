@@ -123,7 +123,7 @@ function corsHeaders(origin, extraHeaders = {}) {
   return {
     'Access-Control-Allow-Origin': origin || '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-User-Id, X-User-Tier, X-User-Email, X-Stream',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-User-Id, X-User-Tier, X-User-Email, X-Stream, X-AI-Provider, X-AI-Model',
     'Access-Control-Expose-Headers': 'X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, X-User-Tier',
     'Access-Control-Max-Age': '86400',
     ...extraHeaders,
@@ -154,6 +154,50 @@ const GEMINI_CONFIG = {
   // Cloudflare Workers enforce a ~30s wall-clock limit on outbound requests.
   // We abort at 25s to return a clean error before Cloudflare issues HTTP 524.
   fetchTimeoutMs: 25000,
+};
+
+// ── Multi-Provider Model Catalog ──
+// Official model IDs only. Update here to change available models without touching the frontend.
+const PROVIDER_MODELS = {
+  gemini: {
+    name: 'Google Gemini',
+    emoji: '✨',
+    defaultModel: 'gemini-3.8-flash',
+    models: [
+      { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash (Default)' },
+      { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+      { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
+    ],
+  },
+  openai: {
+    name: 'OpenAI',
+    emoji: '🤖',
+    defaultModel: 'gpt-4o-mini',
+    models: [
+      { id: 'gpt-4o-mini', label: 'GPT-4o Mini (Fast)' },
+      { id: 'gpt-4o', label: 'GPT-4o' },
+      { id: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
+    ],
+  },
+  deepseek: {
+    name: 'DeepSeek',
+    emoji: '🔍',
+    defaultModel: 'deepseek-chat',
+    models: [
+      { id: 'deepseek-chat', label: 'DeepSeek Chat (V3)' },
+      { id: 'deepseek-reasoner', label: 'DeepSeek Reasoner (R1)' },
+    ],
+  },
+  groq: {
+    name: 'Groq',
+    emoji: '⚡',
+    defaultModel: 'llama-3.3-70b-versatile',
+    models: [
+      { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B (Fast)' },
+      { id: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B' },
+      { id: 'gemma2-9b-it', label: 'Gemma 2 9B' },
+    ],
+  },
 };
 
 /**
@@ -194,23 +238,17 @@ function getGeminiEndpoint(apiKey) {
   return `https://generativelanguage.googleapis.com/${GEMINI_CONFIG.apiVersion}/models/${GEMINI_CONFIG.model}:generateContent?key=${apiKey}`;
 }
 
-/**
- * Construct the Google Gemini streaming endpoint (Server-Sent Events)
- */
-function getGeminiStreamEndpoint(apiKey) {
-  return `https://generativelanguage.googleapis.com/${GEMINI_CONFIG.apiVersion}/models/${GEMINI_CONFIG.model}:streamGenerateContent?alt=sse&key=${apiKey}`;
-}
-
 // ── Gemini API Call with Timeout and Limited Retries ──
 //
-// Design decisions vs. previous implementation:
-//  - AbortController enforces a 25s timeout on every fetch().
-//    If Gemini hasn't responded in 25s, we abort and return HTTP 504 to the caller
-//    BEFORE Cloudflare's own 30s limit kills the Worker and returns HTTP 524 to the browser.
-//  - Retries are reduced to max 1 extra attempt (2 total).
-//    HTTP 524 chains were caused by 4 attempts of a slow Gemini model (4 × slow = very long).
-//    We only retry on true transient overload codes (429, 500, 502, 503), never on timeouts.
-//  - On timeout, the error message is immediately surfaced to the user instead of retrying.
+// Key design decisions:
+//  - AbortSignal.timeout(ms) is used directly in fetch() — this is the correct Cloudflare Workers
+//    API for per-request timeouts. It is properly scoped to the fetch call, unlike AbortController
+//    + setTimeout which had a bug: the timeout handle was created before the await, but the
+//    AbortController signal was not reliably propagated to the streaming reader loop.
+//  - 25s timeout: Cloudflare Workers have a 30s wall-clock CPU limit. By aborting at 25s we
+//    return a clean HTTP 504 instead of Cloudflare returning HTTP 524.
+//  - maxRetries = 1 (2 total attempts). The previous 3 retries caused 4× slow = 524 chains.
+//    We NEVER retry on timeout/AbortError.
 async function callGemini(env, promptOrContents, systemInstruction = '', request = null, maxRetries = 1) {
   const apiKey = resolveGeminiApiKey(env, request);
   if (!apiKey) {
@@ -243,11 +281,10 @@ async function callGemini(env, promptOrContents, systemInstruction = '', request
 
   while (attempt <= maxRetries) {
     attempt++;
-    const controller = new AbortController();
-    const timeoutHandle = setTimeout(() => controller.abort(), GEMINI_CONFIG.fetchTimeoutMs);
-
     try {
       const startMs = Date.now();
+      // AbortSignal.timeout() is correctly scoped to this single fetch call.
+      // It automatically creates and manages the abort signal for us.
       const res = await fetch(endpointUrl, {
         method: 'POST',
         headers: {
@@ -255,9 +292,8 @@ async function callGemini(env, promptOrContents, systemInstruction = '', request
           'x-goog-api-key': apiKey,
         },
         body: JSON.stringify(body),
-        signal: controller.signal,
+        signal: AbortSignal.timeout(GEMINI_CONFIG.fetchTimeoutMs),
       });
-      clearTimeout(timeoutHandle);
       const elapsedMs = Date.now() - startMs;
       console.log(`[Gemini] Attempt ${attempt}: HTTP ${res.status} in ${elapsedMs}ms`);
 
@@ -285,7 +321,7 @@ async function callGemini(env, promptOrContents, systemInstruction = '', request
       const rawErr = await res.text();
       const safeErr = sanitizeErrorMessage(rawErr, apiKey);
 
-      // Only retry on true transient overload (never on timeout — that would compound 524s)
+      // Only retry on true transient overload (never on timeout — would cause 524 chains)
       const isTransient = [429, 500, 502, 503].includes(res.status);
       if (isTransient && attempt <= maxRetries) {
         const delay = (baseDelayMs * Math.pow(2, attempt - 1)) + Math.floor(Math.random() * 400);
@@ -297,35 +333,34 @@ async function callGemini(env, promptOrContents, systemInstruction = '', request
       // Format clear diagnostic error based on Google status code
       let userMessage = `Gemini API error (HTTP ${res.status}): ${safeErr}`;
       if (res.status === 400) {
-        userMessage = `Gemini API request was invalid (HTTP 400): ${safeErr}`;
+        userMessage = `Gemini request invalid (HTTP 400): ${safeErr}`;
       } else if (res.status === 401) {
         userMessage = 'Unauthorized (HTTP 401): Invalid GEMINI_API_KEY. Please verify your Cloudflare Worker secret.';
       } else if (res.status === 403) {
-        userMessage = `Forbidden (HTTP 403): Your GEMINI_API_KEY lacks permissions or region access for ${GEMINI_CONFIG.model}. (${safeErr})`;
+        userMessage = `Forbidden (HTTP 403): Your GEMINI_API_KEY lacks permissions for ${GEMINI_CONFIG.model}. (${safeErr})`;
       } else if (res.status === 404) {
-        userMessage = `Model not found (HTTP 404): Endpoint for '${GEMINI_CONFIG.model}' was not found. (${safeErr})`;
+        userMessage = `Model not found (HTTP 404): '${GEMINI_CONFIG.model}' endpoint not found. (${safeErr})`;
       } else if (res.status === 429) {
-        userMessage = `Google Gemini rate limit exceeded (HTTP 429) after ${attempt} attempts: ${safeErr}`;
+        userMessage = `Rate limit exceeded (HTTP 429) after ${attempt} attempts: ${safeErr}`;
       } else if (res.status === 503) {
-        userMessage = `Google Gemini service temporarily overloaded (HTTP 503) after ${attempt} attempts: ${safeErr}`;
+        userMessage = `Gemini temporarily overloaded (HTTP 503) after ${attempt} attempts: ${safeErr}`;
       } else if (res.status >= 500) {
-        userMessage = `Google Gemini service error (HTTP ${res.status}) after ${attempt} attempts. (${safeErr})`;
+        userMessage = `Gemini server error (HTTP ${res.status}) after ${attempt} attempts. (${safeErr})`;
       }
       throw new Error(userMessage);
 
     } catch (err) {
-      clearTimeout(timeoutHandle);
       lastError = err;
 
-      // AbortError = our 25s timeout fired — do NOT retry, return immediately
-      if (err.name === 'AbortError') {
+      // TimeoutError / AbortError = our 25s timeout fired — surface immediately, never retry
+      if (err.name === 'TimeoutError' || err.name === 'AbortError') {
         throw new Error(
           `AI request timed out after ${Math.round(GEMINI_CONFIG.fetchTimeoutMs / 1000)}s. ` +
-          'Google Gemini is responding slowly. Please try a shorter message or try again in a moment.'
+          'Gemini is taking too long. Please try again or send a shorter message.'
         );
       }
 
-      // If it's a transient network/fetch failure and retries remain, back off and retry
+      // Transient network exception — retry if attempts remain
       if (attempt <= maxRetries && (!err.message || (
         !err.message.includes('HTTP 400') &&
         !err.message.includes('HTTP 401') &&
@@ -333,7 +368,7 @@ async function callGemini(env, promptOrContents, systemInstruction = '', request
         !err.message.includes('HTTP 404')
       ))) {
         const delay = (baseDelayMs * Math.pow(2, attempt - 1)) + Math.floor(Math.random() * 400);
-        console.warn(`[Gemini Retry] Network exception on attempt ${attempt}/${maxRetries}: ${err.message}. Retrying in ${delay}ms...`);
+        console.warn(`[Gemini Retry] Network error on attempt ${attempt}/${maxRetries}: ${err.message}. Retrying in ${delay}ms...`);
         await new Promise(r => setTimeout(r, delay));
         continue;
       }
@@ -345,196 +380,208 @@ async function callGemini(env, promptOrContents, systemInstruction = '', request
 }
 
 /**
- * Handle a streaming chat request via streamGenerateContent (Server-Sent Events).
+ * OpenAI-Compatible API adapter.
+ * Used for OpenAI, DeepSeek, and Groq — all implement the same /chat/completions format.
  *
- * Returns a streaming Response so the browser receives tokens progressively.
- * This keeps the Cloudflare Worker connection alive (the Worker proxies the stream from Google),
- * preventing HTTP 524 timeout errors caused by waiting for a full Gemini response.
- *
- * Stream format sent to client:
- *   data: {"token":"Hello"}\n\n       — incremental text token
- *   data: {"done":true,"elapsed":1234}\n\n  — final chunk with timing
- *   data: {"error":"message"}\n\n     — error chunk
+ * @param {string} baseUrl     - API base URL (no trailing slash, no /chat/completions)
+ * @param {string} apiKey      - Provider API key (from Cloudflare Worker secrets)
+ * @param {string} providerName - Display name for error messages (never exposes key)
+ * @param {string} modelId     - Exact model ID to use
+ * @param {Array}  messages    - [{role: 'user'|'assistant', content: string}]
+ * @param {string} systemMsg   - System instruction
  */
-async function streamGeminiChat(env, contents, systemInstruction, request, origin) {
-  const apiKey = resolveGeminiApiKey(env, request);
+async function callOpenAICompat(baseUrl, apiKey, providerName, modelId, messages, systemMsg = '') {
   if (!apiKey) {
-    return jsonResponse({
-      error: true,
-      code: 'MISSING_GEMINI_API_KEY',
-      message: 'AI service is not configured. Please set GEMINI_API_KEY in Cloudflare Worker secrets.',
-    }, 503, origin);
+    throw new Error(`${providerName} API key is not configured. Add the secret to your Cloudflare Worker.`);
   }
 
-  const streamUrl = getGeminiStreamEndpoint(apiKey);
-  const body = {
-    contents,
-    generationConfig: { maxOutputTokens: GEMINI_CONFIG.maxOutputTokens },
+  // Build messages array: system prompt first, then conversation
+  const chatMessages = [];
+  if (systemMsg) {
+    chatMessages.push({ role: 'system', content: systemMsg });
+  }
+  for (const m of messages) {
+    // Normalize roles: only 'user' and 'assistant' are valid in OpenAI format
+    const role = (m.role === 'assistant' || m.role === 'model') ? 'assistant' : 'user';
+    chatMessages.push({ role, content: String(m.content || '') });
+  }
+
+  const payload = {
+    model: modelId,
+    messages: chatMessages,
+    max_tokens: 2048,
+    temperature: 0.7,
   };
-  if (systemInstruction) {
-    body.systemInstruction = { parts: [{ text: systemInstruction }] };
-  }
 
-  const controller = new AbortController();
-  const timeoutHandle = setTimeout(() => controller.abort(), GEMINI_CONFIG.fetchTimeoutMs);
-  const startMs = Date.now();
+  let attempt = 0;
+  const maxRetries = 1;
+  const baseDelayMs = 1000;
+  let lastError = null;
 
-  let geminiRes;
-  try {
-    geminiRes = await fetch(streamUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-  } catch (fetchErr) {
-    clearTimeout(timeoutHandle);
-    const isTimeout = fetchErr.name === 'AbortError';
-    const msg = isTimeout
-      ? `AI request timed out after ${Math.round(GEMINI_CONFIG.fetchTimeoutMs / 1000)}s. Please try a shorter message or try again.`
-      : sanitizeErrorMessage(fetchErr.message, apiKey);
-    return jsonResponse({ error: true, message: msg }, isTimeout ? 504 : 503, origin);
-  }
-
-  if (!geminiRes.ok) {
-    clearTimeout(timeoutHandle);
-    const rawErr = await geminiRes.text();
-    const safeErr = sanitizeErrorMessage(rawErr, apiKey);
-    return jsonResponse({ error: true, message: `Gemini error (HTTP ${geminiRes.status}): ${safeErr}` }, geminiRes.status, origin);
-  }
-
-  // Pipe the Google SSE stream through to the browser as our own SSE stream
-  const { readable, writable } = new TransformStream();
-  const writer = writable.getWriter();
-  const encoder = new TextEncoder();
-
-  // Process the SSE stream from Google asynchronously
-  (async () => {
-    const reader = geminiRes.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
+  while (attempt <= maxRetries) {
+    attempt++;
     try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
+      const startMs = Date.now();
+      const res = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(25000),
+      });
+      const elapsedMs = Date.now() - startMs;
+      console.log(`[${providerName}] Attempt ${attempt}: HTTP ${res.status} in ${elapsedMs}ms`);
 
-        // SSE lines: "data: {...}\n\n"
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith('data:')) continue;
-          const jsonStr = trimmed.slice(5).trim();
-          if (jsonStr === '[DONE]') continue;
-          try {
-            const chunk = JSON.parse(jsonStr);
-            const parts = chunk?.candidates?.[0]?.content?.parts || [];
-            for (const part of parts) {
-              if (part && typeof part.text === 'string' && !part.thought) {
-                await writer.write(encoder.encode(`data: ${JSON.stringify({ token: part.text })}\n\n`));
-              }
-            }
-          } catch {
-            // Ignore malformed SSE chunks
-          }
+      if (res.ok) {
+        const data = await res.json();
+        const text = data?.choices?.[0]?.message?.content;
+        if (!text && text !== '') {
+          throw new Error(`Empty response from ${providerName}`);
         }
+        return text;
       }
 
-      clearTimeout(timeoutHandle);
-      const elapsed = Date.now() - startMs;
-      await writer.write(encoder.encode(`data: ${JSON.stringify({ done: true, elapsed })}\n\n`));
-    } catch (streamErr) {
-      clearTimeout(timeoutHandle);
-      const isTimeout = streamErr.name === 'AbortError';
-      const msg = isTimeout
-        ? `AI response timed out after ${Math.round(GEMINI_CONFIG.fetchTimeoutMs / 1000)}s. Please try a shorter message.`
-        : sanitizeErrorMessage(streamErr.message, apiKey);
-      await writer.write(encoder.encode(`data: ${JSON.stringify({ error: msg })}\n\n`));
-    } finally {
-      await writer.close().catch(() => {});
-    }
-  })();
+      const rawErr = await res.text();
+      const safeErr = sanitizeErrorMessage(rawErr, apiKey);
 
-  return new Response(readable, {
-    status: 200,
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      ...corsHeaders(origin),
-    },
-  });
+      // Retry on transient errors only
+      const isTransient = [429, 500, 502, 503].includes(res.status);
+      if (isTransient && attempt <= maxRetries) {
+        const delay = (baseDelayMs * Math.pow(2, attempt - 1)) + Math.floor(Math.random() * 400);
+        console.warn(`[${providerName} Retry] HTTP ${res.status} on attempt ${attempt}. Retrying in ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+
+      let userMessage = `${providerName} error (HTTP ${res.status}): ${safeErr}`;
+      if (res.status === 401) userMessage = `${providerName}: Invalid API key (HTTP 401). Verify your Cloudflare Worker secret.`;
+      else if (res.status === 403) userMessage = `${providerName}: Access forbidden (HTTP 403). ${safeErr}`;
+      else if (res.status === 404) userMessage = `${providerName}: Model '${modelId}' not found (HTTP 404). ${safeErr}`;
+      else if (res.status === 429) userMessage = `${providerName}: Rate limit exceeded (HTTP 429). Please wait before sending more requests.`;
+      else if (res.status >= 500) userMessage = `${providerName} server error (HTTP ${res.status}). Please try again.`;
+      throw new Error(userMessage);
+
+    } catch (err) {
+      lastError = err;
+      if (err.name === 'TimeoutError' || err.name === 'AbortError') {
+        throw new Error(`${providerName} request timed out after 25s. Please try again or use a shorter message.`);
+      }
+      if (attempt <= maxRetries && (!err.message || (
+        !err.message.includes('HTTP 401') &&
+        !err.message.includes('HTTP 403') &&
+        !err.message.includes('HTTP 404')
+      ))) {
+        const delay = (baseDelayMs * Math.pow(2, attempt - 1)) + Math.floor(Math.random() * 400);
+        console.warn(`[${providerName} Retry] Network error on attempt ${attempt}: ${err.message}. Retrying in ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw lastError || new Error(`${providerName} request failed after ${maxRetries + 1} attempts.`);
 }
 
 // ── Tool Handlers ──
 
-// 1. Chat API Handler (Supports multi-turn, streams via SSE)
+// 1. Chat API Handler — Multi-Provider (Gemini, OpenAI, DeepSeek, Groq)
 async function handleChat(request, env, origin, usageHeaders) {
   const { messages } = await request.json();
   if (!Array.isArray(messages) || messages.length === 0) {
     return errorResponse('Invalid messages array', 400, origin, usageHeaders);
   }
 
-  // Map messages to Gemini multi-turn format (last 12 turns)
-  const rawContents = messages
-    .slice(-12)
-    .filter(m => m && typeof m.content === 'string' && m.content.trim())
-    .map(m => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content.trim() }]
-    }));
+  // Read provider and model from request headers (set by frontend AI state)
+  const rawProvider = (request.headers.get('X-AI-Provider') || 'gemini').toLowerCase().trim();
+  const provider = PROVIDER_MODELS[rawProvider] ? rawProvider : 'gemini';
+  const providerConfig = PROVIDER_MODELS[provider];
 
-  // Google Gemini requires the first turn to have role 'user'
-  while (rawContents.length > 0 && rawContents[0].role !== 'user') {
-    rawContents.shift();
-  }
+  // Validate and select model (fall back to provider default if unknown model sent)
+  const requestedModel = (request.headers.get('X-AI-Model') || '').trim();
+  const validModelIds = providerConfig.models.map(m => m.id);
+  const modelId = validModelIds.includes(requestedModel) ? requestedModel : providerConfig.defaultModel;
 
-  // Google Gemini requires roles to strictly alternate between 'user' and 'model'
-  const formattedContents = [];
-  for (const item of rawContents) {
-    if (formattedContents.length > 0 && formattedContents[formattedContents.length - 1].role === item.role) {
-      formattedContents[formattedContents.length - 1].parts[0].text += `\n\n${item.parts[0].text}`;
-    } else {
-      formattedContents.push(item);
-    }
-  }
-
-  // Fallback to latest message if empty
-  if (formattedContents.length === 0) {
-    const last = messages[messages.length - 1];
-    formattedContents.push({
-      role: 'user',
-      parts: [{ text: String(last?.content || 'Hello') }]
-    });
-  }
+  console.log(`[Chat] Provider: ${provider}, Model: ${modelId}`);
 
   const systemInstruction = `You are MR.SALL AI, an intelligent, helpful, and versatile AI assistant created by SALIH ABDELQAYOUM BACHIKH. 
 Be concise, accurate, polite, and helpful. Always respond in the language used by the user (Arabic, English, or French).`;
 
-  // Detect if the client supports SSE streaming (sent X-Stream: true header)
-  const wantsStream = request.headers.get('X-Stream') === 'true';
+  // ── Gemini path ──────────────────────────────────────────────
+  if (provider === 'gemini') {
+    // Override GEMINI_CONFIG model with the user's selected model for this request
+    const originalModel = GEMINI_CONFIG.model;
+    GEMINI_CONFIG.model = modelId;
 
-  if (wantsStream) {
-    // Streaming path: tokens arrive progressively, preventing HTTP 524 timeouts.
-    // usageHeaders are added as custom SSE headers on the initial response.
-    const streamRes = await streamGeminiChat(env, formattedContents, systemInstruction, request, origin);
-    // Inject rate-limit headers into the streaming response
-    const newHeaders = new Headers(streamRes.headers);
-    for (const [k, v] of Object.entries(usageHeaders)) {
-      newHeaders.set(k, v);
+    try {
+      // Convert to Gemini multi-turn format
+      const rawContents = messages
+        .slice(-12)
+        .filter(m => m && typeof m.content === 'string' && m.content.trim())
+        .map(m => ({
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: m.content.trim() }]
+        }));
+
+      // Gemini requires first turn to be 'user'
+      while (rawContents.length > 0 && rawContents[0].role !== 'user') rawContents.shift();
+
+      // Gemini requires strictly alternating roles
+      const formattedContents = [];
+      for (const item of rawContents) {
+        if (formattedContents.length > 0 && formattedContents[formattedContents.length - 1].role === item.role) {
+          formattedContents[formattedContents.length - 1].parts[0].text += `\n\n${item.parts[0].text}`;
+        } else {
+          formattedContents.push(item);
+        }
+      }
+
+      if (formattedContents.length === 0) {
+        const last = messages[messages.length - 1];
+        formattedContents.push({ role: 'user', parts: [{ text: String(last?.content || 'Hello') }] });
+      }
+
+      const content = await callGemini(env, formattedContents, systemInstruction, request);
+      return jsonResponse({ content, provider, model: modelId }, 200, origin, usageHeaders);
+    } finally {
+      GEMINI_CONFIG.model = originalModel; // Always restore
     }
-    return new Response(streamRes.body, { status: streamRes.status, headers: newHeaders });
   }
 
-  // Non-streaming fallback (used by other tools and health checks)
-  const content = await callGemini(env, formattedContents, systemInstruction, request);
-  return jsonResponse({ content }, 200, origin, usageHeaders);
+  // ── OpenAI-Compatible path (openai / deepseek / groq) ────────
+  const cleanMessages = messages
+    .slice(-12)
+    .filter(m => m && typeof m.content === 'string' && m.content.trim())
+    .map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content.trim() }));
+
+  if (cleanMessages.length === 0) {
+    const last = messages[messages.length - 1];
+    cleanMessages.push({ role: 'user', content: String(last?.content || 'Hello') });
+  }
+
+  let baseUrl, apiKey;
+  if (provider === 'openai') {
+    baseUrl = 'https://api.openai.com/v1';
+    apiKey = env.OPENAI_API_KEY;
+  } else if (provider === 'deepseek') {
+    baseUrl = 'https://api.deepseek.com/v1';
+    apiKey = env.DEEPSEEK_API_KEY;
+  } else if (provider === 'groq') {
+    baseUrl = 'https://api.groq.com/openai/v1';
+    apiKey = env.GROQ_API_KEY;
+  }
+
+  const content = await callOpenAICompat(
+    baseUrl,
+    apiKey,
+    providerConfig.name,
+    modelId,
+    cleanMessages,
+    systemInstruction
+  );
+  return jsonResponse({ content, provider, model: modelId }, 200, origin, usageHeaders);
 }
 
 // 2. Writer API Handler
@@ -748,6 +795,12 @@ export default {
         version: '2.0.0',
         configured: Boolean(activeApiKey),
         gemini_model: GEMINI_CONFIG.model,
+        providers_configured: {
+          gemini: Boolean(env.GEMINI_API_KEY || env.GOOGLE_API_KEY),
+          openai: Boolean(env.OPENAI_API_KEY),
+          deepseek: Boolean(env.DEEPSEEK_API_KEY),
+          groq: Boolean(env.GROQ_API_KEY),
+        },
         image_configured: Boolean(env.STABILITY_API_KEY),
         limits: {
           free_daily_limit: freeLimit,
@@ -757,6 +810,25 @@ export default {
         server_time_utc: new Date().toISOString(),
         reset_seconds: resetSeconds,
       }, 200, origin);
+    }
+
+    // 2b. Provider catalog endpoint — returns available providers and models
+    if (request.method === 'GET' && path === '/api/providers') {
+      const configured = {
+        gemini: Boolean(env.GEMINI_API_KEY || env.GOOGLE_API_KEY),
+        openai: Boolean(env.OPENAI_API_KEY),
+        deepseek: Boolean(env.DEEPSEEK_API_KEY),
+        groq: Boolean(env.GROQ_API_KEY),
+      };
+      const catalog = Object.entries(PROVIDER_MODELS).map(([id, p]) => ({
+        id,
+        name: p.name,
+        emoji: p.emoji,
+        defaultModel: p.defaultModel,
+        models: p.models,
+        configured: configured[id],
+      }));
+      return jsonResponse({ providers: catalog }, 200, origin);
     }
 
     // 3. User usage status query endpoint (/api/usage) - DOES NOT consume a message credit
@@ -820,14 +892,36 @@ export default {
         }, 429, origin, usageHeaders);
       }
 
-      // Verify Gemini API key configuration
-      const activeApiKey = resolveGeminiApiKey(env, request);
-      if (!activeApiKey && path !== '/api/image') {
-        return jsonResponse({
-          error: true,
-          code: 'MISSING_GEMINI_API_KEY',
-          message: 'AI service is not configured on the server. Please add GEMINI_API_KEY to Worker secrets (wrangler secret put GEMINI_API_KEY) or configure it in Cloudflare Dashboard under Worker Settings > Variables and Secrets.',
-        }, 503, origin);
+      // For chat, any provider key suffices. For all other tools, Gemini is used.
+      const rawProviderCheck = (request.headers.get('X-AI-Provider') || 'gemini').toLowerCase().trim();
+      const providerCheck = PROVIDER_MODELS[rawProviderCheck] ? rawProviderCheck : 'gemini';
+
+      if (path === '/api/chat') {
+        // Check if the requested provider's key is configured
+        const providerKeyMap = {
+          gemini: env.GEMINI_API_KEY || env.GOOGLE_API_KEY,
+          openai: env.OPENAI_API_KEY,
+          deepseek: env.DEEPSEEK_API_KEY,
+          groq: env.GROQ_API_KEY,
+        };
+        if (!providerKeyMap[providerCheck]) {
+          const errorCode = providerCheck === 'gemini' ? 'MISSING_GEMINI_API_KEY' : `MISSING_${providerCheck.toUpperCase()}_API_KEY`;
+          return jsonResponse({
+            error: true,
+            code: errorCode,
+            message: `${PROVIDER_MODELS[providerCheck].name} API key is not configured. Add it to your Cloudflare Worker secrets.`,
+          }, 503, origin);
+        }
+      } else if (path !== '/api/image') {
+        // All other tools use Gemini
+        const activeApiKey = resolveGeminiApiKey(env, request);
+        if (!activeApiKey) {
+          return jsonResponse({
+            error: true,
+            code: 'MISSING_GEMINI_API_KEY',
+            message: 'AI service is not configured on the server. Please add GEMINI_API_KEY to Worker secrets.',
+          }, 503, origin);
+        }
       }
 
       // Prepare response usage headers for successful requests
