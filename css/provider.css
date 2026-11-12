@@ -1,0 +1,154 @@
+/* ============================================
+   MR.SALL AI — Provider Selector Styles
+   Added for multi-provider AI integration
+   ============================================ */
+
+/* ── Provider Selector Bar ── */
+.provider-selector-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.provider-selector-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.provider-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.provider-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.provider-pill:hover {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+  background: var(--bg-card-hover);
+}
+
+.provider-pill.active {
+  background: var(--brand-gradient);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 2px 10px var(--brand-blue-glow);
+}
+
+.provider-pill.unavailable {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.provider-pill.unavailable:hover {
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+  background: var(--bg-card);
+}
+
+.provider-model-select {
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+  transition: border-color var(--transition-fast);
+  max-width: 200px;
+}
+
+.provider-model-select:focus,
+.provider-model-select:hover {
+  border-color: var(--border-hover);
+}
+
+/* Provider status badge in chat header */
+.provider-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.provider-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  flex-shrink: 0;
+}
+
+.provider-status-dot.unavailable {
+  background: #ef4444;
+}
+
+/* Loading state on provider pill */
+.provider-pill.loading {
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 600px) {
+  .provider-selector-bar {
+    padding: 7px 10px;
+    gap: 8px;
+  }
+
+  .provider-pill {
+    padding: 4px 9px;
+    font-size: 11px;
+  }
+
+  .provider-model-select {
+    max-width: 150px;
+    font-size: 11px;
+  }
+
+  .provider-selector-label {
+    font-size: 10px;
+  }
+}
+
+/* RTL support */
+[dir="rtl"] .provider-selector-bar {
+  flex-direction: row-reverse;
+}
