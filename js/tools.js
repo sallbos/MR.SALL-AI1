@@ -245,9 +245,7 @@ const API = (() => {
     if (custom && custom.trim().startsWith('http')) return custom.trim();
     // In an integrated Cloudflare Worker deployment, the worker serves the frontend from same origin
     if (typeof window !== 'undefined' && window.location && window.location.origin && window.location.protocol.startsWith('http')) {
-      if (window.location.hostname.includes('workers.dev') || !DEFAULT_WORKER.includes('your-subdomain')) {
-        return window.location.origin;
-      }
+      return window.location.origin;
     }
     return DEFAULT_WORKER;
   }
@@ -255,9 +253,9 @@ const API = (() => {
   function isConfigured() {
     const custom = localStorage.getItem('mrsall_worker_url');
     if (custom && custom.trim().startsWith('http')) return true;
-    // When served from Cloudflare Workers deployment, same-origin worker backend is available
-    if (typeof window !== 'undefined' && window.location && window.location.hostname) {
-      if (window.location.hostname.includes('workers.dev')) return true;
+    // When served from any web origin (Cloudflare Workers, custom domain, localhost), the same-origin backend is available
+    if (typeof window !== 'undefined' && window.location && window.location.origin && window.location.protocol.startsWith('http')) {
+      return true;
     }
     if (DEFAULT_WORKER && !DEFAULT_WORKER.includes('your-subdomain')) return true;
     return false;
@@ -305,9 +303,12 @@ const API = (() => {
 
   async function call(endpoint, payload) {
     if (!isConfigured()) {
-      return { error: true, message: LanguageManager.t('error_api') };
+      return { error: true, message: typeof LanguageManager !== 'undefined' ? LanguageManager.t('error_api') : 'API not configured' };
     }
     const base = getWorkerBase().replace(/\/+$/, '');
+    const cleanEndpoint = endpoint.replace(/^\/+/, '');
+    const url = base ? `${base}/${cleanEndpoint}` : `/${cleanEndpoint}`;
+
     try {
       const headers = { 'Content-Type': 'application/json' };
       const user = (typeof AuthManager !== 'undefined') ? AuthManager.getUser() : null;
@@ -316,15 +317,24 @@ const API = (() => {
         headers['X-User-Tier'] = (typeof AuthManager.getTier === 'function') ? AuthManager.getTier() : (user.tier || 'free');
         if (user.email) headers['X-User-Email'] = user.email;
       }
+      // Add multi-provider AI headers if configured (used by chat endpoint)
+      if (typeof AIProviderManager !== 'undefined') {
+        const providerHeaders = AIProviderManager.getHeaders();
+        Object.assign(headers, providerHeaders);
+      }
 
-      const res = await fetch(`${base}/${endpoint}`, {
+      // 32-second client-side timeout: the Worker aborts Gemini at 25s and returns a clean 504,
+      // so the browser should receive a response within 27s in the worst case.
+      // If the network itself hangs (Cloudflare unreachable), we bail at 32s with a user-friendly error.
+      const res = await fetch(url, {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(32000),
       });
 
       // Synchronize daily usage headers from backend
-      if (typeof UsageTracker !== 'undefined') {
+      if (typeof UsageTracker !== 'undefined' && res.headers) {
         UsageTracker.syncWithHeaders(res.headers);
       }
 
@@ -333,21 +343,148 @@ const API = (() => {
         if (typeof UsageTracker !== 'undefined') {
           UsageTracker.notifyLimitReached(err.message);
         }
-        return { error: true, isQuota: true, message: err.message || LanguageManager.t('usage_limit_reached') };
+        return { error: true, isQuota: true, message: err.message || (typeof LanguageManager !== 'undefined' ? LanguageManager.t('usage_limit_reached') : 'Daily limit reached') };
       }
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        return { error: true, message: err.message || LanguageManager.t('error_generic') };
+        return { error: true, message: err.message || `Server error (HTTP ${res.status})` };
       }
       return await res.json();
     } catch (e) {
-      return { error: true, message: LanguageManager.t('error_generic') };
+      console.error('API call exception:', e);
+      if (e.name === 'TimeoutError' || e.name === 'AbortError') {
+        return { error: true, message: 'Request timed out. Please check your connection and try again.' };
+      }
+      return { error: true, message: e.message || (typeof LanguageManager !== 'undefined' ? LanguageManager.t('error_generic') : 'An error occurred') };
+    }
+  }
+
+  /**
+   * Stream a chat request via Server-Sent Events (SSE).
+   * Calls the Worker with X-Stream: true, then reads the SSE response progressively.
+   *
+   * @param {Array}    messages      - Array of {role, content} objects
+   * @param {Function} onToken       - Called with each text token as it arrives (string)
+   * @param {Function} onDone        - Called when stream completes with { elapsed } info
+   * @param {Function} onError       - Called on any error with an error message string
+   * @param {AbortSignal} [signal]   - Optional AbortSignal for cancellation
+   */
+  async function streamChat(messages, onToken, onDone, onError, signal) {
+    if (!isConfigured()) {
+      onError(typeof LanguageManager !== 'undefined' ? LanguageManager.t('error_api') : 'API not configured');
+      return;
+    }
+
+    const base = getWorkerBase().replace(/\/+$/, '');
+    const url = `${base}/api/chat`;
+
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-Stream': 'true',
+    };
+    const user = (typeof AuthManager !== 'undefined') ? AuthManager.getUser() : null;
+    if (user && user.id) {
+      headers['X-User-Id'] = user.id;
+      headers['X-User-Tier'] = (typeof AuthManager.getTier === 'function') ? AuthManager.getTier() : (user.tier || 'free');
+      if (user.email) headers['X-User-Email'] = user.email;
+    }
+    // Add multi-provider AI headers if configured
+    if (typeof AIProviderManager !== 'undefined') {
+      const providerHeaders = AIProviderManager.getHeaders();
+      Object.assign(headers, providerHeaders);
+    }
+
+    let res;
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ messages }),
+        signal,
+      });
+    } catch (e) {
+      if (e.name === 'AbortError') {
+        onError('Request cancelled.');
+      } else {
+        onError(e.message || 'Network error. Please check your connection.');
+      }
+      return;
+    }
+
+    // Sync usage headers from SSE response
+    if (typeof UsageTracker !== 'undefined' && res.headers) {
+      UsageTracker.syncWithHeaders(res.headers);
+    }
+
+    if (res.status === 429) {
+      const err = await res.json().catch(() => ({}));
+      if (typeof UsageTracker !== 'undefined') {
+        UsageTracker.notifyLimitReached(err.message);
+      }
+      onError(err.message || (typeof LanguageManager !== 'undefined' ? LanguageManager.t('usage_limit_reached') : 'Daily limit reached'));
+      return;
+    }
+
+    if (!res.ok || !res.body) {
+      const err = await res.json().catch(() => ({}));
+      onError(err.message || `Server error (HTTP ${res.status})`);
+      return;
+    }
+
+    // Read the SSE stream
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // Process complete SSE lines (split on double newline)
+        const events = buffer.split('\n\n');
+        buffer = events.pop() || '';
+
+        for (const event of events) {
+          const dataLine = event.split('\n').find(l => l.startsWith('data:'));
+          if (!dataLine) continue;
+          const jsonStr = dataLine.slice(5).trim();
+          if (!jsonStr || jsonStr === '[DONE]') continue;
+
+          try {
+            const chunk = JSON.parse(jsonStr);
+            if (chunk.error) {
+              onError(chunk.error);
+              return;
+            } else if (chunk.done) {
+              onDone({ elapsed: chunk.elapsed });
+              return;
+            } else if (typeof chunk.token === 'string') {
+              onToken(chunk.token);
+            }
+          } catch {
+            // Ignore parse errors on individual chunks
+          }
+        }
+      }
+      // Stream ended without explicit done event
+      onDone({ elapsed: null });
+    } catch (streamErr) {
+      if (streamErr.name === 'AbortError') {
+        onError('Request cancelled.');
+      } else {
+        onError(streamErr.message || 'Stream read error');
+      }
+    } finally {
+      reader.releaseLock().catch(() => {});
     }
   }
 
   return {
     chat: (messages) => call('api/chat', { messages }),
+    streamChat,
     write: (type, topic, tone, lang) => call('api/write', { type, topic, tone, lang }),
     translate: (text, from, to) => call('api/translate', { text, from, to }),
     study: (mode, content, lang) => call('api/study', { mode, content, lang }),
@@ -382,6 +519,7 @@ const Toast = (() => {
   }
   return { show };
 })();
+window.Toast = Toast;
 
 /* ── Clipboard Helper ── */
 async function copyToClipboard(text) {
@@ -411,6 +549,8 @@ const ChatTool = (() => {
   let conversations = JSON.parse(localStorage.getItem('mrsall_chat_history') || '[]');
   let currentConvId = null;
   let isLoading = false;
+  // AbortController for the in-flight streaming request (prevents duplicate requests)
+  let activeController = null;
 
   function saveHistory() {
     localStorage.setItem('mrsall_chat_history', JSON.stringify(conversations.slice(0, 20)));
@@ -515,6 +655,7 @@ const ChatTool = (() => {
   }
 
   async function sendMessage() {
+    // Prevent duplicate in-flight requests
     if (isLoading) return;
     const textarea = document.getElementById('chat-input');
     if (!textarea) return;
@@ -535,22 +676,35 @@ const ChatTool = (() => {
     saveHistory();
 
     isLoading = true;
+    activeController = new AbortController();
+
     const sendBtn = document.getElementById('chat-send');
     if (sendBtn) sendBtn.disabled = true;
     showTyping();
 
-    const result = await API.chat(conv.messages.map(m => ({ role: m.role, content: m.content })));
-    removeTyping();
-    isLoading = false;
-    if (sendBtn) sendBtn.disabled = false;
+    try {
+      const messagesPayload = conv.messages.map(m => ({ role: m.role, content: m.content }));
+      const result = await API.chat(messagesPayload);
 
-    if (result.error) {
-      appendMessage('assistant', result.message);
-    } else {
-      const reply = result.content || result.text || result.message || LanguageManager.t('error_generic');
-      conv.messages.push({ role: 'assistant', content: reply });
-      saveHistory();
-      appendMessage('assistant', reply);
+      if (result.error) {
+        const errorMsg = result.message || (typeof LanguageManager !== 'undefined' ? LanguageManager.t('error_generic') : 'An error occurred');
+        appendMessage('assistant', `⚠️ ${errorMsg}`);
+      } else {
+        const reply = result.content || result.text || result.message || (typeof LanguageManager !== 'undefined' ? LanguageManager.t('error_generic') : 'No response');
+        conv.messages.push({ role: 'assistant', content: reply });
+        saveHistory();
+        appendMessage('assistant', reply);
+      }
+    } catch (err) {
+      console.error('Chat error:', err);
+      appendMessage('assistant', `⚠️ ${err.message || (typeof LanguageManager !== 'undefined' ? LanguageManager.t('error_generic') : 'An unexpected error occurred')}`);
+    } finally {
+      removeTyping();
+      isLoading = false;
+      activeController = null;
+      if (sendBtn) sendBtn.disabled = false;
+      const el = document.getElementById('chat-messages');
+      if (el) el.scrollTop = el.scrollHeight;
     }
   }
 
@@ -579,6 +733,11 @@ const ChatTool = (() => {
       });
     }
     if (sendBtn) sendBtn.addEventListener('click', sendMessage);
+
+    // Initialize AI provider selector
+    if (typeof AIProviderManager !== 'undefined') {
+      AIProviderManager.init();
+    }
   }
 
   return { init };
@@ -1016,7 +1175,9 @@ const PDFTool = (() => {
 
 /* ── Shared Utility ── */
 function escapeHtml(str) {
-  return str
+  if (str === null || str === undefined) return '';
+  const s = typeof str === 'string' ? str : String(str);
+  return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
